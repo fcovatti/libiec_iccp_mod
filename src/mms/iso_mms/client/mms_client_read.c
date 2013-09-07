@@ -186,6 +186,16 @@ mmsClient_parseListOfAccessResults(AccessResult_t** accessResultList, int listSi
                 memcpy(value->value.binaryTime.buf, accessResultList[i]->choice.binarytime.buf, size);
             }
         }
+	     else if (presentType == AccessResult_PR_octetstring) {
+            value = calloc(1, sizeof(MmsValue));
+            value->type = MMS_OCTET_STRING;
+            int size = accessResultList[i]->choice.octetstring.size;
+            value->value.octetString.size = size;
+            value->value.octetString.buf = malloc(size);
+            memcpy(value->value.octetString.buf,
+                    accessResultList[i]->choice.octetstring.buf, size);
+
+        }
         else {
             printf("unknown type %i\n", presentType);
             retVal = MMS_ERROR;

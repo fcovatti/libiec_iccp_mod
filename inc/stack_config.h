@@ -10,7 +10,7 @@
 #define STACK_CONFIG_H_
 
 /* print debugging information with printf */
-#define DEBUG 1
+#define DEBUG 0
 
 #define STATIC_MODEL 1
 

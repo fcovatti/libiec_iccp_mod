@@ -60,7 +60,6 @@ handleUnconfirmedMmsPdu(MmsConnection self, ByteBuffer* message)
 
                 InformationReport_t* report =
                         &(mmsPdu->choice.unconfirmedPDU.unconfirmedService.choice.informationReport);
-
                 if (report->variableAccessSpecification.present ==
                         VariableAccessSpecification_PR_variableListName)
                 {
@@ -82,10 +81,32 @@ handleUnconfirmedMmsPdu(MmsConnection self, ByteBuffer* message)
                         MmsValue* values = mmsClient_parseListOfAccessResults(
                             report->listOfAccessResult.list.array, listSize);
 
-                        self->reportHandler(self->reportHandlerParameter, domainId, variableListName, values);
+                        self->reportHandler(self->reportHandlerParameter, domainId, variableListName, values, NULL, 0);
                     }
-                }
-                else {
+                }else if (report->variableAccessSpecification.present ==
+                        VariableAccessSpecification_PR_listOfVariable)
+				{
+					int attributesCount = report->variableAccessSpecification.choice.listOfVariable.list.count;
+					int i;
+					LinkedList attributes = LinkedList_create();
+					for (i = 0; i < attributesCount; i++) {
+
+						char* itemName = mmsMsg_createStringFromAsnIdentifier(report->variableAccessSpecification.choice.listOfVariable.list.array[i]->variableSpecification.choice.name.choice.domainspecific.itemId);
+
+						LinkedList_add(attributes, itemName);
+					}
+
+					if (self->reportHandler != NULL) {
+
+						int listSize = report->listOfAccessResult.list.count;
+
+						MmsValue* values = mmsClient_parseListOfAccessResults(
+								report->listOfAccessResult.list.array, listSize);
+
+						self->reportHandler(self->reportHandlerParameter, domainId, variableListName, values, attributes, attributesCount);
+					}
+
+				}else {
                     // Ignore
                 }
 
@@ -385,7 +406,7 @@ mmsClient_getNameList(MmsConnection self, MmsClientError *mmsError,
 
 		char* lastIdentifier = lastElement->data;
 
-	//	if (DEBUG) 
+		if (DEBUG) 
 			printf("getNameList: identifier: %s\n", lastIdentifier);
 
 		moreFollows = mmsClient_getNameListSingleRequest(&list, self, mmsError, domainId,
@@ -453,6 +474,7 @@ MmsConnection_readVariable(MmsConnection self, MmsClientError* mmsError,
 	self->connectionState = MMS_CON_IDLE;
 	return value;
 }
+
 
 MmsValue*
 MmsConnection_readArrayElements(MmsConnection self, MmsClientError* mmsError,
@@ -672,19 +694,16 @@ MmsConnection_defineNamedVariableList(MmsConnection self,  MmsClientError* mmsEr
 
 	self->lastInvokeId++;
 
-	printf("create defined\n");
 	mmsClient_createDefineNamedVariableListRequest(self->lastInvokeId, &payload, domainId,
 			listName, variableSpecs, false);
 
 
-	printf("created\n");
 	self->lastRequestType = MMS_REQ_DEFINE_NAMED_VARIABLE_LIST;
 	self->connectionState = MMS_CON_WAITING;
 
 	IsoClientConnection_sendMessage(self->isoClient, &payload);
 
 
-	printf("created 2\n");
 	/* poll callback handler TODO poll with timeout */
 	while (self->connectionState == MMS_CON_WAITING)
 		Thread_sleep(1);
@@ -723,7 +742,6 @@ MmsConnection_defineNamedVariableListAssociationSpecific(MmsConnection self,
 			listName, variableSpecs, true);
 
 
-	printf("created\n");
 	self->lastRequestType = MMS_REQ_DEFINE_NAMED_VARIABLE_LIST;
 	self->connectionState = MMS_CON_WAITING;
 
