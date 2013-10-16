@@ -89,6 +89,7 @@ Ethernet_createSocket(char* interfaceId, uint8_t* destAddress)
 
     if (ethernetSocket->rawSocket == -1) {
         printf("Error creating raw socket!\n");
+		free(ethernetSocket);
         return NULL;
     }
 

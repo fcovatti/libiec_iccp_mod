@@ -36,6 +36,7 @@ mmsClient_parseWriteResponse(ByteBuffer* message)
 {
 	MmsPdu_t* mmsPdu = 0;
 	MmsIndication retVal =  MMS_OK;
+	int i;
 
 	asn_dec_rval_t rval;
 
@@ -58,10 +59,14 @@ mmsClient_parseWriteResponse(ByteBuffer* message)
 					&(mmsPdu->choice.confirmedResponsePdu.confirmedServiceResponse.choice.write);
 
 			if (response->list.count > 0) {
-				if (response->list.array[0]->present == WriteResponse__Member_PR_success)
-					retVal = MMS_OK;
-				else
-					retVal = MMS_ERROR;
+				for (i=0; i < response->list.count; i++) {
+					if (response->list.array[i]->present == WriteResponse__Member_PR_success)
+						retVal = MMS_OK;
+					else{
+						retVal = MMS_ERROR;
+						break;
+					}
+				}
 			}
 			else
 				retVal = MMS_ERROR;
@@ -120,8 +125,9 @@ mmsClient_createWriteRequest(long invokeId, char* domainId, char* itemId, MmsVal
 	request->listOfData.list.count = 1;
 	request->listOfData.list.size = 1;
 	request->listOfData.list.array = calloc(1, sizeof(struct Data*));
-	request->listOfData.list.array[0] = mmsMsg_createBasicDataElement(value);
+	Data_t* dataElement1 = mmsMsg_createBasicDataElement(value);
 
+	request->listOfData.list.array[0] = dataElement1; 
 	asn_enc_rval_t rval;
 
 	rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
@@ -141,7 +147,76 @@ mmsClient_createWriteRequest(long invokeId, char* domainId, char* itemId, MmsVal
 		free(request->listOfData.list.array[0]->choice.floatingpoint.buf);
 	}
 
-	free(request->listOfData.list.array[0]);
+	free(dataElement1);
+	free(request->listOfData.list.array);
+	//free(request->listOfData.list.array[0]);
+	request->listOfData.list.array = 0;
+
+	asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
+
+	return rval.encoded;
+}
+
+int
+mmsClient_createWriteListRequest(long invokeId, char* domainId, LinkedList itemsId, MmsValue* values,
+		ByteBuffer* writeBuffer)
+{
+	MmsPdu_t* mmsPdu = mmsClient_createConfirmedRequestPdu(invokeId);
+
+	mmsPdu->choice.confirmedRequestPdu.confirmedServiceRequest.present =
+			ConfirmedServiceRequest_PR_write;
+	WriteRequest_t* request =
+			&(mmsPdu->choice.confirmedRequestPdu.confirmedServiceRequest.choice.write);
+
+	int listSize = LinkedList_size(itemsId);
+	int i ;
+	/* Create list of variable specifications */
+	request->variableAccessSpecification.present = VariableAccessSpecification_PR_listOfVariable;
+	request->variableAccessSpecification.choice.listOfVariable.list.count = listSize;
+	request->variableAccessSpecification.choice.listOfVariable.list.size = listSize;
+	request->variableAccessSpecification.choice.listOfVariable.list.array =
+			calloc(listSize, sizeof(ListOfVariableSeq_t*));
+
+	LinkedList element = LinkedList_getNext(itemsId);
+	for(i=0; i < listSize; i++){
+		request->variableAccessSpecification.choice.listOfVariable.list.array[i] =
+				createNewDomainVariableSpecification(domainId, element->data);
+		element = LinkedList_getNext(element);
+	}
+	/* Create list of typed data values */
+	request->listOfData.list.count = listSize;
+	request->listOfData.list.size = listSize;
+	request->listOfData.list.array = calloc(listSize, sizeof(struct Data*));
+
+
+	for(i=0; i < listSize; i++){
+		request->listOfData.list.array[i] = mmsMsg_createBasicDataElement(MmsValue_getElement(values,i));
+	}
+
+	asn_enc_rval_t rval;
+
+	rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
+				mmsClient_write_out, (void*) writeBuffer);
+
+	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
+
+	/* Free ASN structure */
+	request->variableAccessSpecification.choice.listOfVariable.list.count = 0;
+
+	for (i=0;i<listSize;i++){
+		free(request->variableAccessSpecification.choice.listOfVariable.list.array[i]);
+	}
+	free(request->variableAccessSpecification.choice.listOfVariable.list.array);
+	request->variableAccessSpecification.choice.listOfVariable.list.array = 0;
+
+	request->listOfData.list.count = 0;
+
+	for (i=0;i<listSize;i++){
+		if (request->listOfData.list.array[i]->present == Data_PR_floatingpoint) {
+			free(request->listOfData.list.array[i]->choice.floatingpoint.buf);
+		}
+		free(request->listOfData.list.array[i]);
+	}
 	free(request->listOfData.list.array);
 	request->listOfData.list.array = 0;
 

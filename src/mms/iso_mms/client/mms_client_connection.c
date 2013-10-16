@@ -105,6 +105,7 @@ handleUnconfirmedMmsPdu(MmsConnection self, ByteBuffer* message)
 
 						self->reportHandler(self->reportHandlerParameter, domainId, variableListName, values, attributes, attributesCount);
 					}
+					LinkedList_destroy(attributes);
 
 				}else {
                     // Ignore
@@ -936,6 +937,47 @@ MmsConnection_writeVariable(MmsConnection self, MmsClientError* clientError,
 	return indication;
 }
 
+MmsIndication
+MmsConnection_writeListVariable(MmsConnection self, MmsClientError* clientError,
+		char* domainId, LinkedList itemsId,
+		MmsValue* values)
+{
+	MmsIndication indication = MMS_ERROR;
+	ByteBuffer payload;
+	ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
+
+	*clientError = MMS_ERROR_NONE;
+
+	self->lastInvokeId++;
+
+	mmsClient_createWriteListRequest(self->lastInvokeId, domainId, itemsId, values, &payload);
+
+	self->lastRequestType = MMS_REQ_WRITE;
+	self->connectionState = MMS_CON_WAITING;
+
+	IsoClientConnection_sendMessage(self->isoClient, &payload);
+
+	/* poll callback handler TODO poll with timeout */
+	while (self->connectionState == MMS_CON_WAITING)
+		Thread_sleep(1);
+
+	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
+		indication = mmsClient_parseWriteResponse(self->lastResponse);
+
+		if (indication != MMS_OK)
+		    *clientError = MMS_ERROR_SERVICE_ERROR;
+
+		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
+	}
+	else {
+	    if (self->associationState == MMS_STATE_CLOSED)
+	        *clientError = MMS_ERROR_CONNECTION_LOST;
+	}
+
+	self->connectionState = MMS_CON_IDLE;
+	return indication;
+}
+
 MmsVariableSpecification*
 MmsVariableSpecification_create(char* domainId, char* itemId)
 {
@@ -961,4 +1003,26 @@ MmsVariableSpecification_createAlternateAccess(char* domainId, char* itemId, int
 	varSpec->componentName = componentName;
 
 	return varSpec;
+}
+
+MmsIndication MmsConnection_sendUnconfirmedPDU(MmsConnection self, MmsClientError* clientError,char* domainId, char* itemId, uint32_t timeStamp
+		) {
+	ByteBuffer payload;
+	ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
+
+	*clientError = MMS_ERROR_NONE;
+
+	if (domainId == NULL || itemId==NULL) {
+		*clientError = MMS_ERROR_SERVICE_ERROR;
+		return MMS_ERROR;
+	}
+
+	mmsClient_createUnconfirmedPDU(domainId, itemId, timeStamp, &payload);
+
+	self->connectionState = MMS_CON_WAITING;
+
+	IsoClientConnection_sendMessage(self->isoClient, &payload);
+
+	self->connectionState = MMS_CON_IDLE;
+	return MMS_OK;
 }

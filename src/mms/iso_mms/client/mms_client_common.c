@@ -55,3 +55,13 @@ mmsClient_createConfirmedRequestPdu(long invokeId)
 
 	return mmsPdu;
 }
+
+MmsPdu_t*
+mmsClient_createUnconfirmedPdu(void)
+{
+	MmsPdu_t* mmsPdu = calloc(1, sizeof(MmsPdu_t));
+	
+	mmsPdu->present = MmsPdu_PR_unconfirmedPDU;
+
+	return mmsPdu;
+}

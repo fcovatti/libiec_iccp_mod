@@ -35,6 +35,7 @@ TOOLCHAIN_PREFIX=$(UCLINUX_ARM_TOOLCHAIN_PREFIX)
 CFLAGS += -msoft-float
 CFLAGS += -Wall
 CFLAGS += -DEMBED
+CFLAGS += -lefence
 CFLAGS += -Dlinux -D__linux__ -Dunix
 CFLAGS += -D__uClinux__
 LDFLAGS += -Wl,-move-rodata -Wl,-elf2flt
