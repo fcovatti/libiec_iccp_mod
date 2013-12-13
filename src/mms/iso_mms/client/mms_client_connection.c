@@ -40,6 +40,7 @@ handleUnconfirmedMmsPdu(MmsConnection self, ByteBuffer* message)
 
     MmsValue* valueList = NULL;
     MmsValue* value = NULL;
+	char* itemName = NULL;
 
     asn_dec_rval_t rval;
 
@@ -91,7 +92,9 @@ handleUnconfirmedMmsPdu(MmsConnection self, ByteBuffer* message)
 					LinkedList attributes = LinkedList_create();
 					for (i = 0; i < attributesCount; i++) {
 
-						char* itemName = mmsMsg_createStringFromAsnIdentifier(report->variableAccessSpecification.choice.listOfVariable.list.array[i]->variableSpecification.choice.name.choice.domainspecific.itemId);
+						VariableSpecification_t varSpec =report->variableAccessSpecification.choice.listOfVariable.list.array[i]->variableSpecification;
+
+						itemName = createStringFromBuffer(varSpec.choice.name.choice.domainspecific.itemId.buf, varSpec.choice.name.choice.domainspecific.itemId.size);
 
 						LinkedList_add(attributes, itemName);
 					}

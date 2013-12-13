@@ -80,6 +80,9 @@ dynlib:	$(DYN_LIB_NAME)
 
 .PHONY:	examples
 
+release:
+	$(QUIET)git archive -o ~/libiec61850-iccp.tar.gz HEAD
+
 examples:
 	cd examples; $(MAKE)
 
