@@ -52,42 +52,50 @@ typedef enum TypeSpecification_PR {
 struct TypeSpecification;
 struct StructComponent;
 
-/* TypeSpecification */
-typedef struct TypeSpecification {
-	TypeSpecification_PR present;
-	union TypeSpecification_u {
-		ObjectName_t	 typeName;
-		struct TypeSpecification__array {
+struct TypeSpecification__array {
 			BOOLEAN_t	*packed	/* DEFAULT FALSE */;
 			Unsigned32_t	 numberOfElements;
 			struct TypeSpecification	*elementType;
 			
 			/* Context for parsing across buffer boundaries */
 			asn_struct_ctx_t _asn_ctx;
-		} array;
-		struct TypeSpecification__structure {
-			BOOLEAN_t	*packed	/* DEFAULT FALSE */;
-			struct TypeSpecification__structure__components {
+		};
+
+struct TypeSpecification__structure__components {
 				A_SEQUENCE_OF(struct StructComponent) list;
 				
 				/* Context for parsing across buffer boundaries */
 				asn_struct_ctx_t _asn_ctx;
-			} components;
+			};
+
+struct TypeSpecification__structure {
+			BOOLEAN_t	*packed	/* DEFAULT FALSE */;
+			 struct TypeSpecification__structure__components components;
 			
 			/* Context for parsing across buffer boundaries */
 			asn_struct_ctx_t _asn_ctx;
-		} structure;
-		NULL_t	 boolean;
-		Integer32_t	 bitstring;
-		Unsigned8_t	 integer;
-		Unsigned8_t	 Unsigned;
-		struct TypeSpecification__floatingpoint {
+		};
+
+struct TypeSpecification__floatingpoint {
 			Unsigned8_t	 formatwidth;
 			Unsigned8_t	 exponentwidth;
 			
 			/* Context for parsing across buffer boundaries */
 			asn_struct_ctx_t _asn_ctx;
-		} floatingpoint;
+		};
+
+/* TypeSpecification */
+typedef struct TypeSpecification {
+	TypeSpecification_PR present;
+	union TypeSpecification_u {
+		ObjectName_t	 typeName;
+		struct TypeSpecification__array array;
+		struct TypeSpecification__structure structure;
+		NULL_t	 boolean;
+		Integer32_t	 bitstring;
+		Unsigned8_t	 integer;
+		Unsigned8_t	 Unsigned;
+		struct TypeSpecification__floatingpoint floatingpoint;
 		Integer32_t	 octetstring;
 		Integer32_t	 visiblestring;
 		NULL_t	 generalizedtime;

@@ -11,15 +11,16 @@
 
 /* print debugging information with printf */
 #define DEBUG 0
+#define DEBUG_COTP 0
+#define DEBUG_ISO_SERVER 0
+#define DEBUG_ISO_CLIENT 0
+#define DEBUG_IED_SERVER 0
+#define DEBUG_IED_CLIENT 0
 
 #define STATIC_MODEL 1
 
 /* Maximum MMS PDU SIZE - default is 65000 */
-//#define MMS_MAXIMUM_PDU_SIZE 65000
-//
 #define MMS_MAXIMUM_PDU_SIZE 16000
-//TODO: sage
-
 
 /* number of data sets per LN if static option is set */
 #define MMS_ALLOW_CLIENTS_TO_CREATE_ASSOCIATION_SPECIFIC_DATASETS 0
@@ -34,22 +35,23 @@
 #define CONFIG_ACTIVATE_TCP_KEEPALIVE 1
 
 /* time (in s) between last message and first keepalive message */
-#define CONFIG_TCP_KEEPALIVE_IDLE 20
+#define CONFIG_TCP_KEEPALIVE_IDLE 5
 
 /* time between subsequent keepalive messages if no ack received */
-#define CONFIG_TCP_KEEPALIVE_INTERVAL 5
+#define CONFIG_TCP_KEEPALIVE_INTERVAL 2
 
 /* number of not missing keepalive responses until socket is considered dead */
-#define CONFIG_TCP_KEEPALIVE_CNT 3
+#define CONFIG_TCP_KEEPALIVE_CNT 2
 
-/* maximum COTP (ISO 8073) TPDU size - valid range is 1024 - 16384 */
-#define CONFIG_COTP_MAX_TPDU_SIZE 16394
+/* maximum COTP (ISO 8073) TPDU size - valid range is 1024 - 8192 */
+#define CONFIG_COTP_MAX_TPDU_SIZE 8192
 
 /* timeout while reading from TCP stream in ms */
 #define CONFIG_TCP_READ_TIMEOUT_MS 1000
 
 /* Ethernet interface ID for GOOSE and SV */
-#define CONFIG_ETHERNET_INTERFACE_ID "eth0"
+//#define CONFIG_ETHERNET_INTERFACE_ID "eth0"
+#define CONFIG_ETHERNET_INTERFACE_ID "vboxnet0"
 
 /* Set to 1 to include GOOSE support in the build. Otherwise set to 0 */
 #define CONFIG_INCLUDE_GOOSE_SUPPORT 1
@@ -58,7 +60,6 @@
 
 /* GOOSE will be disabled for Windows if ethernet support (winpcap) is not available */
 #ifdef EXCLUDE_ETHERNET_WINDOWS
-#warning disable GOOSE support
 #ifdef CONFIG_INCLUDE_GOOSE_SUPPORT
 #undef CONFIG_INCLUDE_GOOSE_SUPPORT
 #endif
@@ -74,6 +75,12 @@
 /* The GOOSE retransmission interval in ms for the stable condition - i.e. no monitored value changed */
 #define CONFIG_GOOSE_STABLE_STATE_TRANSMISSION_INTERVAL 5000
 
+/* The GOOSE retransmission interval in ms in the case an event happens. */
+#define CONFIG_GOOSE_EVENT_RETRANSMISSION_INTERVAL 500
+
+/* The number of GOOSE retransmissions after an event */
+#define CONFIG_GOOSE_EVENT_RETRANSMISSION_COUNT 2
+
 /* The default value for the priority field of the 802.1Q header (allowed range 0-7) */
 #define CONFIG_GOOSE_DEFAULT_PRIORITY 4
 
@@ -86,11 +93,15 @@
 /* Default destination MAC address for GOOSE */
 #define CONFIG_GOOSE_DEFAULT_DST_ADDRESS {0x01, 0x0c, 0xcd, 0x01, 0x00, 0x01}
 
+/* The default select timeout in ms. This will apply only if no sboTimeout attribute exists for a control object. Set to 0 for no timeout. */
+#define CONFIG_CONTROL_DEFAULT_SBO_TIMEOUT 15000
+
 /* Enable datasets */
 #define CONFIG_DATASETS 1
 
-/* Enable reporting - Note reporting also includes datasets */
-//#define CONFIG_REPORTING 0
+#define CONFIG_DEFAULT_MMS_VENDOR_NAME "libiec61850.com"
+#define CONFIG_DEFAULT_MMS_MODEL_NAME "libiec61850"
+#define CONFIG_DEFAULT_MMS_REVISION "0.6"
 
 /* Definition of supported services */
 #define MMS_DEFAULT_PROFILE 1

@@ -32,7 +32,7 @@
 typedef struct sControlObject ControlObject;
 
 ControlObject*
-ControlObject_create(MmsServer* mmsServer, MmsDomain* domain, char* lnName, char* name);
+ControlObject_create(IedServer iedServer, MmsDomain* domain, char* lnName, char* name);
 
 void
 ControlObject_destroy(ControlObject* self);
@@ -54,6 +54,12 @@ ControlObject_setMmsValue(ControlObject* self, MmsValue* value);
 
 MmsValue*
 ControlObject_getMmsValue(ControlObject* self);
+
+void
+ControlObject_setTypeSpec(ControlObject* self, MmsVariableSpecification* typeSpec);
+
+MmsVariableSpecification*
+ControlObject_getTypeSpec(ControlObject* self);
 
 MmsValue*
 ControlObject_getOper(ControlObject* self);
@@ -80,12 +86,21 @@ MmsDomain*
 ControlObject_getDomain(ControlObject* self);
 
 bool
-ControlObject_select(ControlObject* self);
+ControlObject_select(ControlObject* self, MmsServerConnection* connection);
 
 bool
-ControlObject_operate(ControlObject* self, MmsValue* value);
+ControlObject_unselect(ControlObject* self, MmsServerConnection* connection);
 
 bool
+ControlObject_operate(ControlObject* self, MmsValue* value, uint64_t currentTime, bool testCondition);
+
+void
 ControlObject_installListener(ControlObject* self, ControlHandler listener, void* parameter);
+
+void
+ControlObject_installCheckHandler(ControlObject* self, ControlPerformCheckHandler handler, void* parameter);
+
+void
+ControlObject_installWaitForExecutionHandler(ControlObject* self, ControlWaitForExecutionHandler handler, void* parameter);
 
 #endif /* CONTROL_H_ */

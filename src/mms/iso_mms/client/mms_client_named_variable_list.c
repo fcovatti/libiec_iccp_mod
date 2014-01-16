@@ -30,6 +30,7 @@
 #include "byte_buffer.h"
 #include "string_utilities.h"
 #include "mms_client_internal.h"
+#include "mms_common_internal.h"
 
 
 void
@@ -44,28 +45,28 @@ mmsClient_createDeleteNamedVariableListRequest(long invokeId, ByteBuffer* writeB
 	DeleteNamedVariableListRequest_t* request =
 			&(mmsPdu->choice.confirmedRequestPdu.confirmedServiceRequest.choice.deleteNamedVariableList);
 
-	request->listOfVariableListName = calloc(1,
+	request->listOfVariableListName = (struct DeleteNamedVariableListRequest__listOfVariableListName*) calloc(1,
 			sizeof(struct DeleteNamedVariableListRequest__listOfVariableListName));
 
 	request->listOfVariableListName->list.count = 1;
 	request->listOfVariableListName->list.size = 1;
 
-	request->listOfVariableListName->list.array = calloc(1, sizeof(ObjectName_t*));
-	request->listOfVariableListName->list.array[0] = calloc(1, sizeof(ObjectName_t));
+	request->listOfVariableListName->list.array = (ObjectName_t**) calloc(1, sizeof(ObjectName_t*));
+	request->listOfVariableListName->list.array[0] = (ObjectName_t*) calloc(1, sizeof(ObjectName_t));
 
 	request->listOfVariableListName->list.array[0]->present = ObjectName_PR_domainspecific;
 	request->listOfVariableListName->list.array[0]->choice.domainspecific.domainId.size = strlen(domainId);
-	request->listOfVariableListName->list.array[0]->choice.domainspecific.domainId.buf = copyString(domainId);
+	request->listOfVariableListName->list.array[0]->choice.domainspecific.domainId.buf = (uint8_t*) copyString(domainId);
 	request->listOfVariableListName->list.array[0]->choice.domainspecific.itemId.size = strlen(listNameId);
-	request->listOfVariableListName->list.array[0]->choice.domainspecific.itemId.buf = copyString(listNameId);
+	request->listOfVariableListName->list.array[0]->choice.domainspecific.itemId.buf = (uint8_t*) copyString(listNameId);
 
-	request->scopeOfDelete = calloc(1, sizeof(INTEGER_t));
+	request->scopeOfDelete = (INTEGER_t*) calloc(1, sizeof(INTEGER_t));
 	asn_long2INTEGER(request->scopeOfDelete, DeleteNamedVariableListRequest__scopeOfDelete_specific);
 
 	asn_enc_rval_t rval;
 
 	rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
-	            mmsClient_write_out, (void*) writeBuffer);
+			(asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
 
 	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
 
@@ -86,27 +87,27 @@ mmsClient_createDeleteAssociationSpecificNamedVariableListRequest(
 	DeleteNamedVariableListRequest_t* request =
 			&(mmsPdu->choice.confirmedRequestPdu.confirmedServiceRequest.choice.deleteNamedVariableList);
 
-	request->listOfVariableListName = calloc(1,
+	request->listOfVariableListName = (struct DeleteNamedVariableListRequest__listOfVariableListName*) calloc(1,
 			sizeof(struct DeleteNamedVariableListRequest__listOfVariableListName));
 
 	request->listOfVariableListName->list.count = 1;
 	request->listOfVariableListName->list.size = 1;
 
-	request->listOfVariableListName->list.array = calloc(1, sizeof(ObjectName_t*));
-	request->listOfVariableListName->list.array[0] = calloc(1, sizeof(ObjectName_t));
+	request->listOfVariableListName->list.array = (ObjectName_t**) calloc(1, sizeof(ObjectName_t*));
+	request->listOfVariableListName->list.array[0] = (ObjectName_t*) calloc(1, sizeof(ObjectName_t));
 
 	request->listOfVariableListName->list.array[0]->present = ObjectName_PR_aaspecific;
 
 	request->listOfVariableListName->list.array[0]->choice.aaspecific.size = strlen(listNameId);
-	request->listOfVariableListName->list.array[0]->choice.aaspecific.buf = copyString(listNameId);
+	request->listOfVariableListName->list.array[0]->choice.aaspecific.buf = (uint8_t*) copyString(listNameId);
 
-	request->scopeOfDelete = calloc(1, sizeof(INTEGER_t));
+	request->scopeOfDelete = (INTEGER_t*) calloc(1, sizeof(INTEGER_t));
 	asn_long2INTEGER(request->scopeOfDelete, DeleteNamedVariableListRequest__scopeOfDelete_specific);
 
 	asn_enc_rval_t rval;
 
 	rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
-	            mmsClient_write_out, (void*) writeBuffer);
+	            (asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
 
 	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
 
@@ -128,7 +129,9 @@ mmsClient_parseDeleteNamedVariableListResponse(ByteBuffer* message, uint32_t* in
 
 	if (rval.code == RC_OK) {
 		if (mmsPdu->present == MmsPdu_PR_confirmedResponsePdu) {
-			*invokeId = mmsClient_getInvokeId(&mmsPdu->choice.confirmedResponsePdu);
+
+		    if (invokeId != NULL)
+		        *invokeId = mmsClient_getInvokeId(&mmsPdu->choice.confirmedResponsePdu);
 
 			if (mmsPdu->choice.confirmedResponsePdu.confirmedServiceResponse.present ==
 					ConfirmedServiceResponse_PR_deleteNamedVariableList)
@@ -167,20 +170,20 @@ mmsClient_createGetNamedVariableListAttributesRequest(uint32_t invokeId, ByteBuf
 	request->present = ObjectName_PR_domainspecific;
 
 	request->choice.domainspecific.domainId.size = strlen(domainId);
-	request->choice.domainspecific.domainId.buf = copyString(domainId);
+	request->choice.domainspecific.domainId.buf = (uint8_t*) copyString(domainId);
 
 	request->choice.domainspecific.itemId.size = strlen(listNameId);
-	request->choice.domainspecific.itemId.buf = copyString(listNameId);
+	request->choice.domainspecific.itemId.buf = (uint8_t*) copyString(listNameId);
 
 	der_encode(&asn_DEF_MmsPdu, mmsPdu,
-			mmsClient_write_out, (void*) writeBuffer);
+			(asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
 
 	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
 
 	asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
 }
 
-static LinkedList
+static LinkedList /* <MmsVariableAccessSpecification*> */
 parseNamedVariableAttributes(GetNamedVariableListAttributesResponse_t* response, bool* deletable)
 {
 	if (deletable != NULL)
@@ -192,18 +195,25 @@ parseNamedVariableAttributes(GetNamedVariableListAttributesResponse_t* response,
 	LinkedList attributes = LinkedList_create();
 
 	for (i = 0; i < attributesCount; i++) {
+
+
 		//TODO add checks
 
-		char* itemName = mmsMsg_createStringFromAsnIdentifier(response->listOfVariable.list.array[i]->
+	    char* domainId = mmsMsg_createStringFromAsnIdentifier(response->listOfVariable.list.array[i]->
+	            variableSpecification.choice.name.choice.domainspecific.domainId);
+
+		char* itemId = mmsMsg_createStringFromAsnIdentifier(response->listOfVariable.list.array[i]->
 				variableSpecification.choice.name.choice.domainspecific.itemId);
 
-		LinkedList_add(attributes, itemName);
+		MmsVariableAccessSpecification* listEntry = MmsVariableAccessSpecification_create(domainId, itemId);
+
+		LinkedList_add(attributes, listEntry);
 	}
 
 	return attributes;
 }
 
-LinkedList
+LinkedList /* <MmsVariableAccessSpecification*> */
 mmsClient_parseGetNamedVariableListAttributesResponse(ByteBuffer* message, uint32_t* invokeId,
 		bool* /*OUT*/ deletable)
 {
@@ -219,7 +229,9 @@ mmsClient_parseGetNamedVariableListAttributesResponse(ByteBuffer* message, uint3
 
 	if (rval.code == RC_OK) {
 		if (mmsPdu->present == MmsPdu_PR_confirmedResponsePdu) {
-			*invokeId = mmsClient_getInvokeId(&mmsPdu->choice.confirmedResponsePdu);
+
+		    if (invokeId != NULL)
+		        *invokeId = mmsClient_getInvokeId(&mmsPdu->choice.confirmedResponsePdu);
 
 			if (mmsPdu->choice.confirmedResponsePdu.confirmedServiceResponse.present ==
 					ConfirmedServiceResponse_PR_getNamedVariableListAttributes)
@@ -258,16 +270,16 @@ mmsClient_createDefineNamedVariableListRequest(
 		request->variableListName.present = ObjectName_PR_aaspecific;
 
 		request->variableListName.choice.aaspecific.size = strlen(listNameId);
-		request->variableListName.choice.aaspecific.buf = copyString(listNameId);
+		request->variableListName.choice.aaspecific.buf = (uint8_t*) copyString(listNameId);
 	}
 	else {
 		request->variableListName.present = ObjectName_PR_domainspecific;
 
 		request->variableListName.choice.domainspecific.domainId.size = strlen(domainId);
-		request->variableListName.choice.domainspecific.domainId.buf = copyString(domainId);
+		request->variableListName.choice.domainspecific.domainId.buf = (uint8_t*) copyString(domainId);
 
 		request->variableListName.choice.domainspecific.itemId.size = strlen(listNameId);
-		request->variableListName.choice.domainspecific.itemId.buf = copyString(listNameId);
+		request->variableListName.choice.domainspecific.itemId.buf = (uint8_t*) copyString(listNameId);
 	}
 
 	int listSize = LinkedList_size(listOfVariables);
@@ -275,23 +287,23 @@ mmsClient_createDefineNamedVariableListRequest(
 	request->listOfVariable.list.count = listSize;
 	request->listOfVariable.list.size = listSize;
 
-	request->listOfVariable.list.array = calloc(listSize, sizeof(void*));
+	request->listOfVariable.list.array = 
+		(struct DefineNamedVariableListRequest__listOfVariable__Member**) calloc(listSize, sizeof(void*));
 
 	int i = 0;
 	LinkedList element = LinkedList_getNext(listOfVariables);
 	while (i < listSize) {
 
-		MmsVariableSpecification* variableSpec = (MmsVariableSpecification*) element->data;
- 
-//inicio 
-		request->listOfVariable.list.array[i] =
+		MmsVariableAccessSpecification* variableSpec = (MmsVariableAccessSpecification*) element->data;
+
+		request->listOfVariable.list.array[i] = (struct DefineNamedVariableListRequest__listOfVariable__Member*)
 				calloc(1, sizeof(struct DefineNamedVariableListRequest__listOfVariable__Member));
 
 		request->listOfVariable.list.array[i]->variableSpecification.present =
 				VariableSpecification_PR_name;
 
 		request->listOfVariable.list.array[i]->variableSpecification.choice.name.present =
-				ObjectName_PR_domainspecific;
+			ObjectName_PR_domainspecific;
 		if (variableSpec->arrayIndex == 0) {
 
 			request->listOfVariable.list.array[i]->variableSpecification.choice.name.present =	ObjectName_PR_vmdspecific;
@@ -302,30 +314,31 @@ mmsClient_createDefineNamedVariableListRequest(
 
 		}	else {	
 			request->listOfVariable.list.array[i]->variableSpecification.choice.name.present =
-					ObjectName_PR_domainspecific;
-		request->listOfVariable.list.array[i]->variableSpecification.choice.name.choice.
-			domainspecific.domainId.size = strlen(variableSpec->domainId);
+				ObjectName_PR_domainspecific;
 
-		request->listOfVariable.list.array[i]->variableSpecification.choice.name.choice.
-			domainspecific.domainId.buf = copyString(variableSpec->domainId);
+			request->listOfVariable.list.array[i]->variableSpecification.choice.name.choice.
+				domainspecific.domainId.size = strlen(variableSpec->domainId);
 
-		request->listOfVariable.list.array[i]->variableSpecification.choice.name.choice.
-			domainspecific.itemId.size = strlen(variableSpec->itemId);
+			request->listOfVariable.list.array[i]->variableSpecification.choice.name.choice.
+				domainspecific.domainId.buf = (uint8_t*) copyString(variableSpec->domainId);
 
-		request->listOfVariable.list.array[i]->variableSpecification.choice.name.choice.
-			domainspecific.itemId.buf = copyString(variableSpec->itemId);
+			request->listOfVariable.list.array[i]->variableSpecification.choice.name.choice.
+				domainspecific.itemId.size = strlen(variableSpec->itemId);
+
+			request->listOfVariable.list.array[i]->variableSpecification.choice.name.choice.
+				domainspecific.itemId.buf = (uint8_t*) copyString(variableSpec->itemId);
 		}
-		//TODO add alternate access
 #if 0
+		//TODO add alternate access
 		if (variableSpec->arrayIndex != -1) {
 
-			AlternateAccess_t* alternateAccess = calloc(1, sizeof(AlternateAccess_t));
+			AlternateAccess_t* alternateAccess = (AlternateAccess_t*) calloc(1, sizeof(AlternateAccess_t));
 			alternateAccess->list.count = 1;
-			alternateAccess->list.array = calloc(1, sizeof(struct AlternateAccess__Member*));
-			alternateAccess->list.array[0] = calloc(1, sizeof(struct AlternateAccess__Member));
+			alternateAccess->list.array = (struct AlternateAccess__Member**) calloc(1, sizeof(struct AlternateAccess__Member*));
+			alternateAccess->list.array[0] = (struct AlternateAccess__Member*) calloc(1, sizeof(struct AlternateAccess__Member));
 
 			alternateAccess->list.array[0]->present = AlternateAccess__Member_PR_unnamed;
-			alternateAccess->list.array[0]->choice.unnamed = calloc(1, sizeof(AlternateAccessSelection_t));
+			alternateAccess->list.array[0]->choice.unnamed = (AlternateAccessSelection_t*) calloc(1, sizeof(AlternateAccessSelection_t));
 
 			alternateAccess->list.array[0]->choice.unnamed->present =
 					AlternateAccessSelection_PR_selectAlternateAccess;
@@ -338,14 +351,14 @@ mmsClient_createDefineNamedVariableListRequest(
 
 			if (variableSpec->componentName != NULL) {
 
-				AlternateAccess_t* componentAccess = calloc(1, sizeof(AlternateAccess_t));
+				AlternateAccess_t* componentAccess = (AlternateAccess_t*) calloc(1, sizeof(AlternateAccess_t));
 
 				componentAccess->list.count = 1;
-				componentAccess->list.array = calloc(1, sizeof(struct AlternateAccess__Member*));
-				componentAccess->list.array[0] = calloc(1, sizeof(struct AlternateAccess__Member));
+				componentAccess->list.array = (struct AlternateAccess__Member**) calloc(1, sizeof(struct AlternateAccess__Member*));
+				componentAccess->list.array[0] = (struct AlternateAccess__Member*) calloc(1, sizeof(struct AlternateAccess__Member));
 
 				componentAccess->list.array[0]->present = AlternateAccess__Member_PR_unnamed;
-				componentAccess->list.array[0]->choice.unnamed = calloc(1, sizeof(AlternateAccessSelection_t));
+				componentAccess->list.array[0]->choice.unnamed = (AlternateAccessSelection_t*) calloc(1, sizeof(AlternateAccessSelection_t));
 
 
 				componentAccess->list.array[0]->choice.unnamed->present = AlternateAccessSelection_PR_selectAccess;
@@ -356,7 +369,7 @@ mmsClient_createDefineNamedVariableListRequest(
 						&(componentAccess->list.array[0]->choice.unnamed->choice.selectAccess.choice.component);
 
 				componentIdentifier->size = strlen(variableSpec->componentName);
-				componentIdentifier->buf = copyString(variableSpec->componentName);
+				componentIdentifier->buf = (uint8_t*) copyString(variableSpec->componentName);
 
 				alternateAccess->list.array[0]->choice.unnamed->choice.selectAlternateAccess.alternateAccess
 					= componentAccess;
@@ -364,15 +377,15 @@ mmsClient_createDefineNamedVariableListRequest(
 
 			request->listOfVariable.list.array[i]->alternateAccess = alternateAccess;
 		}
-
 #endif
+
 		element = LinkedList_getNext(element);
 
 		i++;
 	}
 
 	der_encode(&asn_DEF_MmsPdu, mmsPdu,
-			mmsClient_write_out, (void*) writeBuffer);
+		(asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
 
 	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
 
@@ -396,7 +409,8 @@ mmsClient_parseDefineNamedVariableResponse(ByteBuffer* message, uint32_t* invoke
 
 	if (rval.code == RC_OK) {
 		if (mmsPdu->present == MmsPdu_PR_confirmedResponsePdu) {
-			*invokeId = mmsClient_getInvokeId(&mmsPdu->choice.confirmedResponsePdu);
+		    if (invokeId != NULL)
+		        *invokeId = mmsClient_getInvokeId(&mmsPdu->choice.confirmedResponsePdu);
 
 			if (mmsPdu->choice.confirmedResponsePdu.confirmedServiceResponse.present ==
 					ConfirmedServiceResponse_PR_defineNamedVariableList)

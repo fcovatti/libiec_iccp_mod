@@ -24,15 +24,17 @@ extern "C" {
 /* Forward declarations */
 struct Data;
 
-/* WriteRequest */
-typedef struct WriteRequest {
-	VariableAccessSpecification_t	 variableAccessSpecification;
-	struct WriteRequest__listOfData {
+struct WriteRequest__listOfData {
 		A_SEQUENCE_OF(struct Data) list;
 		
 		/* Context for parsing across buffer boundaries */
 		asn_struct_ctx_t _asn_ctx;
-	} listOfData;
+	};
+
+/* WriteRequest */
+typedef struct WriteRequest {
+	VariableAccessSpecification_t	 variableAccessSpecification;
+	 struct WriteRequest__listOfData listOfData;
 	
 	/* Context for parsing across buffer boundaries */
 	asn_struct_ctx_t _asn_ctx;

@@ -38,7 +38,7 @@ LinkedList_create()
 {
 	LinkedList newList;
 
-	newList = malloc(sizeof(struct sLinkedList));
+	newList = (LinkedList) malloc(sizeof(struct sLinkedList));
 	newList->data = NULL;
 	newList->next = NULL;
 
@@ -48,9 +48,8 @@ LinkedList_create()
 /**
  * Destroy list (free). Also frees element data with helper function.
  */
-
 void
-LinkedList_destroyDeep(LinkedList list, void (*valueDeleteFunction) (void*))
+LinkedList_destroyDeep(LinkedList list, LinkedListValueDeleteFunction valueDeleteFunction)
 {
 	LinkedList nextElement = list;
 	LinkedList currentElement;
@@ -112,6 +111,27 @@ LinkedList_add(LinkedList list, void* data)
 	listEnd->next = newElement;
 }
 
+bool
+LinkedList_remove(LinkedList list, void* data)
+{
+    LinkedList lastElement = list;
+
+    LinkedList currentElement = list->next;
+
+    while (currentElement != NULL) {
+        if (currentElement->data == data) {
+            lastElement->next = currentElement->next;
+            free(currentElement);
+            return true;
+        }
+
+        lastElement = currentElement;
+        currentElement = currentElement->next;
+    }
+
+    return false;
+}
+
 LinkedList
 LinkedList_insertAfter(LinkedList list, void* data)
 {
@@ -131,6 +151,25 @@ LinkedList inline
 LinkedList_getNext(LinkedList list)
 {
 	return list->next;
+}
+
+LinkedList
+LinkedList_get(LinkedList list, int index)
+{
+    LinkedList element = LinkedList_getNext(list);
+
+    int i = 0;
+
+    while (i < index) {
+        element = LinkedList_getNext(element);
+
+        if (element == NULL)
+            return NULL;
+
+        i++;
+    }
+
+    return element;
 }
 
 void

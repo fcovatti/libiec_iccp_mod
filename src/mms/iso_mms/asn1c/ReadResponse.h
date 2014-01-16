@@ -24,15 +24,17 @@ extern "C" {
 struct VariableAccessSpecification;
 struct AccessResult;
 
-/* ReadResponse */
-typedef struct ReadResponse {
-	struct VariableAccessSpecification	*variableAccessSpecification	/* OPTIONAL */;
-	struct ReadResponse__listOfAccessResult {
+struct ReadResponse__listOfAccessResult {
 		A_SEQUENCE_OF(struct AccessResult) list;
 		
 		/* Context for parsing across buffer boundaries */
 		asn_struct_ctx_t _asn_ctx;
-	} listOfAccessResult;
+	};
+
+/* ReadResponse */
+typedef struct ReadResponse {
+	struct VariableAccessSpecification	*variableAccessSpecification	/* OPTIONAL */;
+	struct ReadResponse__listOfAccessResult listOfAccessResult;
 	
 	/* Context for parsing across buffer boundaries */
 	asn_struct_ctx_t _asn_ctx;

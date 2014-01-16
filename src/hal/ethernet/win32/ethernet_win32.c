@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <malloc.h>
 
 #include <winsock2.h>
 #include <iphlpapi.h>
@@ -46,6 +47,7 @@ struct sEthernetSocket {
     struct bpf_program etherTypeFilter;
 };
 
+#ifdef __GNUC__ /* detect MINGW */
 
 #define MAX_ADAPTER_ADDRESS_LENGTH      8
 
@@ -76,6 +78,7 @@ typedef struct _IP_ADAPTER_ADDRESSES {
 typedef ULONG (WINAPI* pgetadaptersaddresses)(ULONG family, ULONG flags, PVOID reserved, PIP_ADAPTER_ADDRESSES AdapterAddresses,
 		PULONG SizePointer);
 
+
 static pgetadaptersaddresses GetAdaptersAddresses;
 
 static bool dllLoaded = false;
@@ -85,12 +88,21 @@ loadDLLs()
 {
 	HINSTANCE hDll = LoadLibrary("iphlpapi.dll");
 
+	if (hDll == NULL) {
+	    printf("Error loading iphlpapi.dll!\n");
+	    return;
+	}
+
+
 	GetAdaptersAddresses = (pgetadaptersaddresses) GetProcAddress(hDll,
 			"GetAdaptersAddresses");
 
 	if (GetAdaptersAddresses == NULL)
-			printf("Error loading GetAdaptersAddresses from in iphlpapi.dll (%d)\n", GetLastError());
+			printf("Error loading GetAdaptersAddresses from iphlpapi.dll (%d)\n", GetLastError());
 }
+
+#endif /* __GNUC__ */
+
 
 static char*
 getInterfaceName(int interfaceIndex)
@@ -116,7 +128,7 @@ getInterfaceName(int interfaceIndex)
     for(device = devices; device != NULL; device= device->next)
     {
         if (i == interfaceIndex) {
-            interfaceName = malloc(strlen(device->name) + 1);
+            interfaceName = (char*) malloc(strlen(device->name) + 1);
             strcpy(interfaceName, device->name);
             printf("Use interface (%s)\n", interfaceName);
             ifaceFound = true;
@@ -193,10 +205,12 @@ getAdapterMacAddress(char* pcapAdapterName, uint8_t* macAddress)
 void
 Ethernet_getInterfaceMACAddress(char* interfaceId, uint8_t* addr)
 {
+#ifdef __GNUC__
     if (!dllLoaded) {
     	loadDLLs();
     	dllLoaded = true;
     }
+#endif
 
     char* endPtr;
 
@@ -229,7 +243,7 @@ Ethernet_createSocket(char* interfaceId, uint8_t* destAddress)
         return NULL;
     }
 
-    EthernetSocket ethernetSocket = calloc(1, sizeof(struct sEthernetSocket));
+    EthernetSocket ethernetSocket = (EthernetSocket) calloc(1, sizeof(struct sEthernetSocket));
 
     ethernetSocket->rawSocket = pcapSocket;
 
@@ -253,7 +267,7 @@ Ethernet_sendPacket(EthernetSocket ethSocket, uint8_t* buffer, int packetSize)
 void
 Ethernet_setProtocolFilter(EthernetSocket ethSocket, uint16_t etherType)
 {
-	char* filterString = alloca(100);
+	char* filterString = (char*) alloca(100);
 
 	sprintf(filterString, "(ether proto 0x%04x) or (vlan and ether proto 0x%04x)", etherType, etherType);
 
@@ -273,7 +287,7 @@ Ethernet_receivePacket(EthernetSocket self, uint8_t* buffer, int bufferSize)
 	struct pcap_pkthdr* header;
 	uint8_t* packetData;
 
-	int pcapCode = pcap_next_ex(self->rawSocket, &header, &packetData);
+	int pcapCode = pcap_next_ex(self->rawSocket, &header, (const unsigned char**) &packetData);
 
 	if (pcapCode > 0) {
 		int packetSize = header->caplen;

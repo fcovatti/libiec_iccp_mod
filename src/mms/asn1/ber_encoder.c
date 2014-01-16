@@ -228,7 +228,7 @@ BerEncoder_compressInteger(uint8_t* integer, int originalSize)
 int
 BerEncoder_encodeUInt32(uint32_t value, uint8_t* buffer, int bufPos)
 {
-    uint8_t* valueArray = &value;
+    uint8_t* valueArray = (uint8_t*) &value;
     uint8_t valueBuffer[5];
 
     valueBuffer[0] = 0;
@@ -253,7 +253,7 @@ BerEncoder_encodeUInt32(uint32_t value, uint8_t* buffer, int bufPos)
 int
 BerEncoder_encodeUInt32WithTL(uint8_t tag, uint32_t value, uint8_t* buffer, int bufPos)
 {
-    uint8_t* valueArray = &value;
+    uint8_t* valueArray = (uint8_t*) &value;
     uint8_t valueBuffer[5];
 
     valueBuffer[0] = 0;
@@ -307,7 +307,7 @@ BerEncoder_encodeFloat(uint8_t* floatValue, uint8_t formatWidth, uint8_t exponen
 int
 BerEncoder_UInt32determineEncodedSize(uint32_t value)
 {
-    uint8_t* valueArray = &value;
+    uint8_t* valueArray = (uint8_t*) &value;
     uint8_t valueBuffer[5];
 
     valueBuffer[0] = 0;

@@ -62,7 +62,7 @@ BerDecoder_decodeLength(uint8_t* buffer, int* length, int bufPos, int maxBufPos)
 char*
 BerDecoder_decodeString(uint8_t* buffer, int strlen, int bufPos, int maxBufPos)
 {
-    char* string = malloc(strlen + 1);
+    char* string = (char*) malloc(strlen + 1);
     memcpy(string, buffer + bufPos, strlen);
     string[strlen] = 0;
 
@@ -86,7 +86,7 @@ float
 BerDecoder_decodeFloat(uint8_t* buffer, int bufPos)
 {
     float value;
-    uint8_t* valueBuf = &value;
+    uint8_t* valueBuf = (uint8_t*) &value;
 
     int i;
 
@@ -109,7 +109,7 @@ double
 BerDecoder_decodeDouble(uint8_t* buffer, int bufPos)
 {
     double value;
-    uint8_t* valueBuf = &value;
+    uint8_t* valueBuf = (uint8_t*) &value;
 
     int i;
 

@@ -47,9 +47,9 @@
         <LDevice inst="Device1">
           <LN0 lnClass="LLN0" lnType="LLN01" inst="">
             <DataSet name="dataset1" desc="">
-              <FCDA ldInst="SampleIEDDevice1" lnClass="LLN0" fc="ST" doName="Mod" daName="q" />
-              <FCDA ldInst="SampleIEDDevice1" lnClass="MMXU" fc="ST" lnInst="1" doName="Mod" daName="q" />
-              <FCDA ldInst="SampleIEDDevice1" lnClass="MMXU" fc="CF" lnInst="1" doName="Mod" daName="ctlModel" />
+              <FCDA ldInst="Device1" lnClass="LLN0" fc="ST" doName="Mod" daName="q" />
+              <FCDA ldInst="Device1" lnClass="MMXU" fc="ST" lnInst="1" doName="Mod" daName="q" />
+              <FCDA ldInst="Device1" lnClass="MMXU" fc="CF" lnInst="1" doName="Mod" daName="ctlModel" />
             </DataSet>
             <ReportControl name="LLN0_Events_BuffRep" rptID="LLN0$RP$brcbEV1" datSet="dataset1" confRev="1" buffered="true"
 					desc="Events brcb buffered report" intgPd="900000" bufTime="50">

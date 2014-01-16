@@ -28,7 +28,7 @@ copySubString(char* startPos, char* endPos)
 {
 	int newStringLength = endPos - startPos;
 
-	char* newString = malloc(newStringLength) + 1;
+	char* newString = (char*) malloc(newStringLength) + 1;
 
 	memcpy(newString, startPos, newStringLength);
 
@@ -42,11 +42,23 @@ copyString(char* string)
 {
 	int newStringLength = strlen(string) + 1;
 
-	char* newString = malloc(newStringLength);
+	char* newString = (char*) malloc(newStringLength);
 
 	memcpy(newString, string, newStringLength);
 
 	return newString;
+}
+
+
+char*
+createStringFromBuffer(uint8_t* buf, int size)
+{
+	char* newStr = (char*) malloc(size + 1);
+
+	memcpy(newStr, buf, size);
+	newStr[size] = 0;
+
+	return newStr;
 }
 
 
@@ -88,7 +100,7 @@ createString(int count, ...)
 	}
 	va_end(ap);
 
-	newStr = malloc(newStringLength + 1);
+	newStr = (char*) malloc(newStringLength + 1);
 	currentPos = newStr;
 
 
@@ -105,13 +117,56 @@ createString(int count, ...)
 	return newStr;
 }
 
-char* createStringFromBuffer(uint8_t* buf, int size)
+void
+StringUtils_replace(char* string, char oldChar, char newChar)
 {
-	char* newStr = malloc(size + 1);
+    int len = strlen(string);
+    int i;
 
-	memcpy(newStr, buf, size);
-	newStr[size] = 0;
+    for (i = 0; i < len; i++){
+        if (string[i] == oldChar)
+            string[i] = newChar;
+    }
+}
 
-	return newStr;
+bool
+StringUtils_isDigit(char character)
+{
+	if ((character > 47) && (character < 58))
+		return true;
+	else
+		return false;
+}
+
+int
+StringUtils_digitToInt(char digit)
+{
+	if (StringUtils_isDigit(digit)) {
+		return (digit - 48);
+	}
+	else
+		return -1;
+}
+
+int
+StringUtils_digitsToInt(char* digits, int count)
+{
+	int i = 0;
+	int value = 0;
+
+	while (i < count) {
+		value = value * 10;
+
+		int digitValue = StringUtils_digitToInt(*(digits + i));
+
+		if (digitValue == -1)
+			return -1;
+
+		value += digitValue;
+
+		i++;
+	}
+
+	return value;
 }
 

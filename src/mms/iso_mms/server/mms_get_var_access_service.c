@@ -29,19 +29,18 @@
 
 static int
 createTypeSpecification (
-		MmsTypeSpecification* namedVariable,
+		MmsVariableSpecification* namedVariable,
 		TypeSpecification_t* typeSpec)
 {
 
 	if (namedVariable->type == MMS_ARRAY) {
 		typeSpec->present = TypeSpecification_PR_array;
-		typeSpec->choice.array.numberOfElements;
 
 		asn_long2INTEGER(&(typeSpec->choice.array.numberOfElements),
 				(long) namedVariable->typeSpec.array.elementCount);
 
 		typeSpec->choice.array.packed = NULL;
-		typeSpec->choice.array.elementType = calloc(1, sizeof(TypeSpecification_t));
+		typeSpec->choice.array.elementType = (TypeSpecification_t*) calloc(1, sizeof(TypeSpecification_t));
 
 		createTypeSpecification(namedVariable->typeSpec.array.elementTypeSpec,
 				typeSpec->choice.array.elementType);
@@ -56,26 +55,26 @@ createTypeSpecification (
 		typeSpec->choice.structure.components.list.size = componentCount;
 
 		typeSpec->choice.structure.components.list.array
-			= calloc(componentCount, sizeof(StructComponent_t*));
+			= (StructComponent_t**) calloc(componentCount, sizeof(StructComponent_t*));
 
 		int i;
 
 		for (i = 0; i < componentCount; i++) {
 
-			typeSpec->choice.structure.components.list.array[i] =
-					calloc(1, sizeof(StructComponent_t));
+			typeSpec->choice.structure.components.list.array[i] = 
+					(StructComponent_t*) calloc(1, sizeof(StructComponent_t));
 
 			typeSpec->choice.structure.components.list.array[i]->componentName =
-					calloc(1, sizeof(Identifier_t));
+					(Identifier_t*) calloc(1, sizeof(Identifier_t));
 
 			typeSpec->choice.structure.components.list.array[i]->componentName->buf =
-			        copyString(namedVariable->typeSpec.structure.elements[i]->name);
+			        (uint8_t*) copyString(namedVariable->typeSpec.structure.elements[i]->name);
 
 			typeSpec->choice.structure.components.list.array[i]->componentName->size =
 					strlen(namedVariable->typeSpec.structure.elements[i]->name);
 
 			typeSpec->choice.structure.components.list.array[i]->componentType =
-					calloc(1, sizeof(TypeSpecification_t));
+					(TypeSpecification_t*) calloc(1, sizeof(TypeSpecification_t));
 
 			createTypeSpecification(namedVariable->typeSpec.structure.elements[i],
 					typeSpec->choice.structure.components.list.array[i]->componentType);
@@ -164,7 +163,6 @@ deleteVariableAccessAttributesResponse(
 		GetVariableAccessAttributesResponse_t* getVarAccessAttr)
 {
 	if (getVarAccessAttr->typeSpecification.present	== TypeSpecification_PR_structure) {
-		int size =	getVarAccessAttr->typeSpecification.choice.structure.components.list.size;
 		int count =	getVarAccessAttr->typeSpecification.choice.structure.components.list.count;
 
 		int i;
@@ -183,8 +181,12 @@ deleteVariableAccessAttributesResponse(
 		getVarAccessAttr->typeSpecification.choice.structure.components.list.array = NULL;
 		getVarAccessAttr->typeSpecification.choice.structure.components.list.count = 0;
 		getVarAccessAttr->typeSpecification.choice.structure.components.list.size =	0;
-	} else {
-		if (DEBUG) printf("problem deleting ASN1 structure!\n");
+	} else if (getVarAccessAttr->typeSpecification.present == TypeSpecification_PR_array) {
+		free(getVarAccessAttr->typeSpecification.choice.array.numberOfElements.buf);
+		getVarAccessAttr->typeSpecification.choice.array.numberOfElements.buf = NULL;
+		getVarAccessAttr->typeSpecification.choice.array.numberOfElements.size = 0;
+		freeTypeSpecRecursive(getVarAccessAttr->typeSpecification.choice.array.elementType);
+		getVarAccessAttr->typeSpecification.choice.array.elementType = NULL;
 	}
 }
 
@@ -205,7 +207,7 @@ createVariableAccessAttributesResponse(
 		return -1;
 	}
 
-	MmsTypeSpecification* namedVariable = MmsDomain_getNamedVariable(domain, nameId);
+	MmsVariableSpecification* namedVariable = MmsDomain_getNamedVariable(domain, nameId);
 
 	if (namedVariable == NULL) {
 		if (DEBUG) printf("mms_server: named variable %s not known\n", nameId);
@@ -226,10 +228,7 @@ createVariableAccessAttributesResponse(
 
 	createTypeSpecification(namedVariable, &getVarAccessAttr->typeSpecification);
 
-	asn_enc_rval_t rval;
-
-	rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
-			mmsServer_write_out, (void*) response);
+	der_encode(&asn_DEF_MmsPdu, mmsPdu, mmsServer_write_out, (void*) response);
 
 	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
 
@@ -244,7 +243,7 @@ int
 mmsServer_handleGetVariableAccessAttributesRequest(
 		MmsServerConnection* connection,
 		uint8_t* buffer, int bufPos, int maxBufPos,
-		int invokeId,
+		uint32_t invokeId,
 		ByteBuffer* response)
 {
 	int retVal = 0;
@@ -256,30 +255,35 @@ mmsServer_handleGetVariableAccessAttributesRequest(
 	rval = ber_decode(NULL, &asn_DEF_GetVariableAccessAttributesRequest,
 				(void**) &request, buffer + bufPos, maxBufPos - bufPos);
 
-	if (request->present == GetVariableAccessAttributesRequest_PR_name) {
-		if (request->choice.name.present == ObjectName_PR_domainspecific) {
-			Identifier_t domainId = request->choice.name.choice.domainspecific.domainId;
-			Identifier_t nameId = request->choice.name.choice.domainspecific.itemId;
+	if (rval.code == RC_OK) {
+		if (request->present == GetVariableAccessAttributesRequest_PR_name) {
+			if (request->choice.name.present == ObjectName_PR_domainspecific) {
+				Identifier_t domainId = request->choice.name.choice.domainspecific.domainId;
+				Identifier_t nameId = request->choice.name.choice.domainspecific.itemId;
 
-			char* domainIdStr = createStringFromBuffer(domainId.buf, domainId.size);
-			char* nameIdStr = createStringFromBuffer(nameId.buf, nameId.size);
-			if (DEBUG) printf("getVariableAccessAttributes domainId: %s nameId: %s\n", domainIdStr, nameIdStr);
+				char* domainIdStr = createStringFromBuffer(domainId.buf, domainId.size);
+				char* nameIdStr = createStringFromBuffer(nameId.buf, nameId.size);
+				if (DEBUG) printf("getVariableAccessAttributes domainId: %s nameId: %s\n", domainIdStr, nameIdStr);
 
-			createVariableAccessAttributesResponse(connection, domainIdStr, nameIdStr, invokeId, response);
+				createVariableAccessAttributesResponse(connection, domainIdStr, nameIdStr, invokeId, response);
 
-			free(domainIdStr);
-			free(nameIdStr);
+				free(domainIdStr);
+				free(nameIdStr);
+			}
+			else {
+				if (DEBUG) printf("GetVariableAccessAttributesRequest with name other than domainspecific is not supported!\n");
+				retVal = -1;
+			}
 		}
 		else {
-			if (DEBUG) printf("GetVariableAccessAttributesRequest with name other than domainspecific is not supported!\n");
+			if (DEBUG) printf("GetVariableAccessAttributesRequest with address not supported!\n");
 			retVal = -1;
 		}
 	}
 	else {
-		if (DEBUG) printf("GetVariableAccessAttributesRequest with address not supported!\n");
+		if (DEBUG) printf("GetVariableAccessAttributesRequest parsing request failed!\n");
 		retVal = -1;
 	}
-
 
 	asn_DEF_GetVariableAccessAttributesRequest.free_struct(&asn_DEF_GetVariableAccessAttributesRequest, request, 0);
 

@@ -44,7 +44,7 @@ void sigint_handler(int signalId)
 }
 
 void
-controlListener(void* parameter, MmsValue* value)
+controlHandler(void* parameter, MmsValue* value)
 {
     printf("received control command %i %i: ", value->type, value->value.boolean);
 
@@ -73,16 +73,16 @@ int main(int argc, char** argv) {
 	/* MMS server will be instructed to start listening to client connections. */
 	IedServer_start(iedServer, 102);
 
-	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO1, (ControlHandler) controlListener,
+	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO1, (ControlHandler) controlHandler,
 	        IEDMODEL_GenericIO_GGIO1_SPCSO1);
 
-	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO2, (ControlHandler) controlListener,
+	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO2, (ControlHandler) controlHandler,
 	            IEDMODEL_GenericIO_GGIO1_SPCSO2);
 
-	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO3, (ControlHandler) controlListener,
+	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO3, (ControlHandler) controlHandler,
 	            IEDMODEL_GenericIO_GGIO1_SPCSO3);
 
-	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO4, (ControlHandler) controlListener,
+	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO4, (ControlHandler) controlHandler,
 	            IEDMODEL_GenericIO_GGIO1_SPCSO4);
 
 	if (!IedServer_isRunning(iedServer)) {

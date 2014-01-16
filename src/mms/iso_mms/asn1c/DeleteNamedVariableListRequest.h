@@ -33,15 +33,17 @@ typedef enum DeleteNamedVariableListRequest__scopeOfDelete {
 /* Forward declarations */
 struct ObjectName;
 
-/* DeleteNamedVariableListRequest */
-typedef struct DeleteNamedVariableListRequest {
-	INTEGER_t	*scopeOfDelete	/* DEFAULT 0 */;
-	struct DeleteNamedVariableListRequest__listOfVariableListName {
+struct DeleteNamedVariableListRequest__listOfVariableListName {
 		A_SEQUENCE_OF(struct ObjectName) list;
 		
 		/* Context for parsing across buffer boundaries */
 		asn_struct_ctx_t _asn_ctx;
-	} *listOfVariableListName;
+};
+
+/* DeleteNamedVariableListRequest */
+typedef struct DeleteNamedVariableListRequest {
+	INTEGER_t	*scopeOfDelete	/* DEFAULT 0 */;
+	struct DeleteNamedVariableListRequest__listOfVariableListName *listOfVariableListName;
 	Identifier_t	*domainName	/* OPTIONAL */;
 	
 	/* Context for parsing across buffer boundaries */

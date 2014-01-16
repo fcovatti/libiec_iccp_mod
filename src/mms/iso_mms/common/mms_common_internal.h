@@ -23,6 +23,7 @@
 
 #include "mms_value.h"
 #include "MmsPdu.h"
+#include "mms_access_result.h"
 
 MmsValue*
 mmsMsg_parseDataElement(Data_t* dataElement);

@@ -49,7 +49,7 @@ typedef enum {
 typedef struct sIsoConnection* IsoConnection;
 
 
-struct sIsoServerCallbacks {
+typedef struct sIsoServerCallbacks {
 	void (*clientConnected) (IsoConnection connection);
 } IsoServerCallbacks;
 
@@ -71,14 +71,23 @@ void
 IsoConnection_installListener(IsoConnection self, MessageReceivedHandler handler,
 		void* parameter);
 
+/**
+ * \brief send a message over an ISO connection
+ *
+ * \param handlerMode specifies if this function is used in the context of the connection handling thread
+ *        (handlerMode)
+ */
 void
-IsoConnection_sendMessage(IsoConnection self, ByteBuffer* message);
+IsoConnection_sendMessage(IsoConnection self, ByteBuffer* message, bool handlerMode);
 
 IsoServer
 IsoServer_create();
 
 void
 IsoServer_setTcpPort(IsoServer self, int port);
+
+void
+IsoServer_setLocalIpAddress(IsoServer self, char* ipAddress);
 
 IsoServerState
 IsoServer_getState(IsoServer self);

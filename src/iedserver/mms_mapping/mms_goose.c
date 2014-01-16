@@ -46,13 +46,19 @@ struct sMmsGooseControlBlock {
 
     MmsDomain* domain;
     LogicalNode* logicalNode;
-    MmsTypeSpecification* mmsType;
+    MmsVariableSpecification* mmsType;
     MmsValue* mmsValue;
     GoosePublisher publisher;
+
     DataSet* dataSet;
+    bool isDynamicDataSet;
+
     LinkedList dataSetValues;
     uint64_t nextPublishTime;
-    Semaphore* publisherMutex;
+    int retransmissionsLeft; /* number of retransmissions left for the last event */
+    Semaphore publisherMutex;
+
+    MmsMapping* mmsMapping;
 
     char* goCBRef;
     char* goId;
@@ -62,7 +68,7 @@ struct sMmsGooseControlBlock {
 MmsGooseControlBlock
 MmsGooseControlBlock_create()
 {
-    MmsGooseControlBlock self = calloc(1, sizeof(struct sMmsGooseControlBlock));
+	MmsGooseControlBlock self = (MmsGooseControlBlock) calloc(1, sizeof(struct sMmsGooseControlBlock));
 
     self->publisherMutex = Semaphore_create(1);
 
@@ -88,6 +94,11 @@ MmsGooseControlBlock_destroy(MmsGooseControlBlock self)
 
     if (self->dataSetRef != NULL)
         free(self->dataSetRef);
+
+    if (self->dataSet != NULL) {
+        if (self->isDynamicDataSet)
+            MmsMapping_freeDynamicallyCreatedDataSet(self->dataSet);
+    }
 
     MmsValue_delete(self->mmsValue);
 
@@ -124,6 +135,12 @@ MmsGooseControlBlock_getMmsValues(MmsGooseControlBlock self)
     return self->mmsValue;
 }
 
+MmsVariableSpecification*
+MmsGooseControlBlock_getVariableSpecification(MmsGooseControlBlock self)
+{
+    return self->mmsType;
+}
+
 bool
 MmsGooseControlBlock_isEnabled(MmsGooseControlBlock self)
 {
@@ -136,45 +153,93 @@ MmsGooseControlBlock_enable(MmsGooseControlBlock self)
     Semaphore_wait(self->publisherMutex);
 
     if (!MmsGooseControlBlock_isEnabled(self)) {
-        MmsValue* goEna = MmsValue_getElement(self->mmsValue, 0);
-
-        MmsValue_setBoolean(goEna, true);
 
 
-        MmsValue* dstAddress = MmsValue_getElement(self->mmsValue, 5);
+        if (self->dataSetRef != NULL) {
+            free(self->dataSetRef);
 
-        CommParameters commParameters;
-        commParameters.appId = MmsValue_toInt32(MmsValue_getElement(dstAddress, 3));
-        commParameters.vlanId = MmsValue_toInt32(MmsValue_getElement(dstAddress, 2));
-        commParameters.vlanPriority = MmsValue_toInt32(MmsValue_getElement(dstAddress, 1));
+            if (self->dataSet != NULL)
+                if (self->isDynamicDataSet)
+                    MmsMapping_freeDynamicallyCreatedDataSet(self->dataSet);
 
-        MmsValue* macAddress = MmsValue_getElement(dstAddress, 0);
-
-        int i;
-        for (i = 0; i < 6; i++) {
-            commParameters.dstAddress[i] = macAddress->value.octetString.buf[i];
+            if (self->dataSetValues != NULL) {
+                LinkedList_destroyStatic(self->dataSetValues);
+                self->dataSetValues = NULL;
+            }
         }
 
-        self->publisher = GoosePublisher_create(&commParameters, NULL);
+        self->dataSet = NULL;
 
-        GoosePublisher_setTimeAllowedToLive(self->publisher, CONFIG_GOOSE_STABLE_STATE_TRANSMISSION_INTERVAL * 3);
-        GoosePublisher_setDataSetRef(self->publisher, self->dataSetRef);
-        GoosePublisher_setGoCbRef(self->publisher, self->goCBRef);
+        char* dataSetRef = MmsValue_toString(MmsValue_getElement(self->mmsValue, 2));
 
-        if (self->goId != NULL)
-            GoosePublisher_setGoID(self->publisher, self->goId);
+        if (dataSetRef != NULL) {
 
+            self->dataSetRef = copyString(dataSetRef);
 
-        //prepare data set values
-        self->dataSetValues = LinkedList_create();
+            self->dataSet = IedModel_lookupDataSet(self->mmsMapping->model, self->dataSetRef);
 
-        DataSet* dataSet = self->dataSet;
+            self->isDynamicDataSet = false;
 
-        for (i = 0; i < dataSet->elementCount; i++) {
-            LinkedList_add(self->dataSetValues, dataSet->fcda[i]->value);
+            if (self->dataSet == NULL) {
+                self->dataSet = MmsMapping_getDomainSpecificDataSet(self->mmsMapping, self->dataSetRef);
+
+                self->isDynamicDataSet = true;
+            }
+
         }
 
-        self->goEna = true;
+        if (self->dataSet != NULL) {
+
+            MmsValue* goEna = MmsValue_getElement(self->mmsValue, 0);
+
+            MmsValue_setBoolean(goEna, true);
+
+
+            MmsValue* dstAddress = MmsValue_getElement(self->mmsValue, 5);
+
+            CommParameters commParameters;
+            commParameters.appId = MmsValue_toInt32(MmsValue_getElement(dstAddress, 3));
+            commParameters.vlanId = MmsValue_toInt32(MmsValue_getElement(dstAddress, 2));
+            commParameters.vlanPriority = MmsValue_toInt32(MmsValue_getElement(dstAddress, 1));
+
+            MmsValue* macAddress = MmsValue_getElement(dstAddress, 0);
+
+            int i;
+            for (i = 0; i < 6; i++) {
+               commParameters.dstAddress[i] = macAddress->value.octetString.buf[i];
+            }
+
+            self->publisher = GoosePublisher_create(&commParameters, NULL);
+
+            GoosePublisher_setTimeAllowedToLive(self->publisher, CONFIG_GOOSE_STABLE_STATE_TRANSMISSION_INTERVAL * 3);
+
+            GoosePublisher_setDataSetRef(self->publisher, self->dataSetRef);
+
+            GoosePublisher_setGoCbRef(self->publisher, self->goCBRef);
+
+            uint32_t confRev = MmsValue_toUint32(MmsValue_getElement(self->mmsValue, 3));
+
+            GoosePublisher_setConfRev(self->publisher, confRev);
+
+            bool needsCom = MmsValue_getBoolean(MmsValue_getElement(self->mmsValue, 4));
+
+            GoosePublisher_setNeedsCommission(self->publisher, needsCom);
+
+            if (self->goId != NULL)
+                GoosePublisher_setGoID(self->publisher, self->goId);
+
+            //prepare data set values
+            self->dataSetValues = LinkedList_create();
+
+            DataSet* dataSet = self->dataSet;
+
+            for (i = 0; i < dataSet->elementCount; i++) {
+                LinkedList_add(self->dataSetValues, dataSet->fcda[i]->value);
+            }
+
+            self->goEna = true;
+        }
+
     }
 
     Semaphore_post(self->publisherMutex);
@@ -213,8 +278,26 @@ MmsGooseControlBlock_checkAndPublish(MmsGooseControlBlock self, uint64_t current
 
         GoosePublisher_publish(self->publisher, self->dataSetValues);
 
-        self->nextPublishTime = currentTime +
+        if (self->retransmissionsLeft > 0) {
+            self->nextPublishTime = currentTime + CONFIG_GOOSE_EVENT_RETRANSMISSION_INTERVAL;
+
+
+            if (self->retransmissionsLeft > 1)
+                GoosePublisher_setTimeAllowedToLive(self->publisher,
+                        CONFIG_GOOSE_EVENT_RETRANSMISSION_INTERVAL * 3);
+            else
+                GoosePublisher_setTimeAllowedToLive(self->publisher,
+                        CONFIG_GOOSE_STABLE_STATE_TRANSMISSION_INTERVAL * 3);
+
+            self->retransmissionsLeft--;
+        }
+        else {
+            GoosePublisher_setTimeAllowedToLive(self->publisher,
+                                CONFIG_GOOSE_STABLE_STATE_TRANSMISSION_INTERVAL * 3);
+
+            self->nextPublishTime = currentTime +
                 CONFIG_GOOSE_STABLE_STATE_TRANSMISSION_INTERVAL;
+        }
 
         Semaphore_post(self->publisherMutex);
     }
@@ -227,105 +310,93 @@ MmsGooseControlBlock_observedObjectChanged(MmsGooseControlBlock self)
 
     uint64_t currentTime = GoosePublisher_increaseStNum(self->publisher);
 
-    self->nextPublishTime = currentTime +
+    self->retransmissionsLeft = CONFIG_GOOSE_EVENT_RETRANSMISSION_COUNT;
+
+    if (self->retransmissionsLeft > 0) {
+        self->nextPublishTime = currentTime +
+                CONFIG_GOOSE_EVENT_RETRANSMISSION_INTERVAL;
+
+        GoosePublisher_setTimeAllowedToLive(self->publisher,
+                           CONFIG_GOOSE_EVENT_RETRANSMISSION_INTERVAL * 3);
+    }
+    else {
+        self->nextPublishTime = currentTime +
             CONFIG_GOOSE_STABLE_STATE_TRANSMISSION_INTERVAL;
+
+        GoosePublisher_setTimeAllowedToLive(self->publisher,
+                           CONFIG_GOOSE_STABLE_STATE_TRANSMISSION_INTERVAL * 3);
+    }
 
     GoosePublisher_publish(self->publisher, self->dataSetValues);
 
     Semaphore_post(self->publisherMutex);
 }
 
-
-MmsValue*
-MmsGooseControlBlock_getGCBValue(MmsGooseControlBlock self, char* elementName)
-{
-    if (strcmp(elementName, "GoEna") == 0)
-        return MmsValue_getElement(self->mmsValue, 0);
-    else if (strcmp(elementName, "GoID") == 0)
-        return MmsValue_getElement(self->mmsValue, 1);
-    else if (strcmp(elementName, "DatSet") == 0)
-        return MmsValue_getElement(self->mmsValue, 2);
-    else if (strcmp(elementName, "ConfRev") == 0)
-        return MmsValue_getElement(self->mmsValue, 3);
-    else if (strcmp(elementName, "NdsCom") == 0)
-        return MmsValue_getElement(self->mmsValue, 4);
-    else if (strcmp(elementName, "DstAddress") == 0)
-        return MmsValue_getElement(self->mmsValue, 5);
-    else if (strcmp(elementName, "MinTime") == 0)
-        return MmsValue_getElement(self->mmsValue, 6);
-    else if (strcmp(elementName, "MaxTime") == 0)
-        return MmsValue_getElement(self->mmsValue, 7);
-    else if (strcmp(elementName, "FixedOffs") == 0)
-        return MmsValue_getElement(self->mmsValue, 8);
-
-    return NULL ;
-}
-
-static MmsTypeSpecification*
+static MmsVariableSpecification*
 createMmsGooseControlBlock(char* gcbName)
 {
-    MmsTypeSpecification* gcb = calloc(1, sizeof(MmsTypeSpecification));
+    MmsVariableSpecification* gcb = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     gcb->name = copyString(gcbName);
     gcb->type = MMS_STRUCTURE;
     gcb->typeSpec.structure.elementCount = 9;
-    gcb->typeSpec.structure.elements = calloc(9, sizeof(MmsTypeSpecification*));
+    gcb->typeSpec.structure.elements = (MmsVariableSpecification**) calloc(9, sizeof(MmsVariableSpecification*));
 
-    MmsTypeSpecification* namedVariable;
+    MmsVariableSpecification* namedVariable;
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("GoEna");
     namedVariable->type = MMS_BOOLEAN;
 
     gcb->typeSpec.structure.elements[0] = namedVariable;
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("GoID");
     namedVariable->typeSpec.visibleString = -129;
     namedVariable->type = MMS_VISIBLE_STRING;
 
     gcb->typeSpec.structure.elements[1] = namedVariable;
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("DatSet");
     namedVariable->typeSpec.visibleString = -129;
     namedVariable->type = MMS_VISIBLE_STRING;
 
     gcb->typeSpec.structure.elements[2] = namedVariable;
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("ConfRev");
     namedVariable->type = MMS_UNSIGNED;
     namedVariable->typeSpec.unsignedInteger = 32;
 
     gcb->typeSpec.structure.elements[3] = namedVariable;
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("NdsCom");
     namedVariable->type = MMS_BOOLEAN;
 
     gcb->typeSpec.structure.elements[4] = namedVariable;
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("DstAddress");
     MmsMapping_createPhyComAddrStructure(namedVariable);
 
     gcb->typeSpec.structure.elements[5] = namedVariable;
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("MinTime");
     namedVariable->type = MMS_UNSIGNED;
     namedVariable->typeSpec.unsignedInteger = 32;
 
     gcb->typeSpec.structure.elements[6] = namedVariable;
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("MaxTime");
     namedVariable->type = MMS_UNSIGNED;
     namedVariable->typeSpec.unsignedInteger = 32;
 
     gcb->typeSpec.structure.elements[7] = namedVariable;
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("FixedOffs");
     namedVariable->type = MMS_BOOLEAN;
 
@@ -367,18 +438,18 @@ createDataSetReference(char* domainName, char* lnName, char* dataSetName)
     return dataSetReference;
 }
 
-MmsTypeSpecification*
+MmsVariableSpecification*
 GOOSE_createGOOSEControlBlocks(MmsMapping* self, MmsDomain* domain,
         LogicalNode* logicalNode, int gseCount)
 {
-    MmsTypeSpecification* namedVariable = calloc(1,
-            sizeof(MmsTypeSpecification));
+    MmsVariableSpecification* namedVariable = (MmsVariableSpecification*) calloc(1,
+            sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("GO");
     namedVariable->type = MMS_STRUCTURE;
 
     namedVariable->typeSpec.structure.elementCount = gseCount;
-    namedVariable->typeSpec.structure.elements = calloc(gseCount,
-            sizeof(MmsTypeSpecification*));
+    namedVariable->typeSpec.structure.elements = (MmsVariableSpecification**) calloc(gseCount,
+            sizeof(MmsVariableSpecification*));
 
     int currentGCB = 0;
 
@@ -386,7 +457,7 @@ GOOSE_createGOOSEControlBlocks(MmsMapping* self, MmsDomain* domain,
         GSEControlBlock* gooseControlBlock = getGCBForLogicalNodeWithIndex(
                 self, logicalNode, currentGCB);
 
-        MmsTypeSpecification* gseTypeSpec = createMmsGooseControlBlock(gooseControlBlock->name);
+        MmsVariableSpecification* gseTypeSpec = createMmsGooseControlBlock(gooseControlBlock->name);
 
         MmsValue* gseValues = MmsValue_newStructure(gseTypeSpec);
 
@@ -405,9 +476,11 @@ GOOSE_createGOOSEControlBlocks(MmsMapping* self, MmsDomain* domain,
             MmsValue_setVisibleString(goID, gooseControlBlock->appId);
         }
 
-
-        mmsGCB->dataSetRef = createDataSetReference(MmsDomain_getName(domain),
-                logicalNode->name, gooseControlBlock->dataSetName);
+        if (gooseControlBlock->dataSetName != NULL)
+        	mmsGCB->dataSetRef = createDataSetReference(MmsDomain_getName(domain),
+        			logicalNode->name, gooseControlBlock->dataSetName);
+        else
+        	mmsGCB->dataSetRef = NULL;
 
         MmsValue* dataSetRef = MmsValue_getElement(gseValues, 2);
 
@@ -443,8 +516,7 @@ GOOSE_createGOOSEControlBlocks(MmsMapping* self, MmsDomain* domain,
         MmsValue* appIdVal = MmsValue_getElement(dstAddress, 3);
         MmsValue_setUint16(appIdVal, appId);
 
-
-        mmsGCB->dataSet = IedModel_lookupDataSet(self->model, mmsGCB->dataSetRef);
+        mmsGCB->dataSet = NULL;
 
         mmsGCB->mmsValue = gseValues;
         mmsGCB->mmsType = gseTypeSpec;
@@ -452,6 +524,8 @@ GOOSE_createGOOSEControlBlocks(MmsMapping* self, MmsDomain* domain,
 
         mmsGCB->domain = domain;
         mmsGCB->logicalNode = logicalNode;
+
+        mmsGCB->mmsMapping = self;
 
         LinkedList_add(self->gseControls, mmsGCB);
 

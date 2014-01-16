@@ -31,59 +31,66 @@
 #include <MmsPdu.h>
 
 #include "byte_buffer.h"
+#include "ber_decode.h"
+
+#define CONFIG_MMS_CONNECTION_DEFAULT_TIMEOUT 5000
+#define OUTSTANDING_CALLS 10
 
 static void
 handleUnconfirmedMmsPdu(MmsConnection self, ByteBuffer* message)
 {
-    MmsPdu_t* mmsPdu = 0; /* allow asn1c to allocate structure */
-    MmsIndication retVal =  MMS_OK;
+	if (self->reportHandler != NULL) {
+	    MmsPdu_t* mmsPdu = 0; /* allow asn1c to allocate structure */
 
-    MmsValue* valueList = NULL;
-    MmsValue* value = NULL;
-	char* itemName = NULL;
+	    MmsValue* valueList = NULL;
+	    MmsValue* value = NULL;
+		char* itemName = NULL;
+	    asn_dec_rval_t rval;
 
-    asn_dec_rval_t rval;
+	    rval = ber_decode(NULL, &asn_DEF_MmsPdu,
+	            (void**) &mmsPdu, ByteBuffer_getBuffer(message), ByteBuffer_getSize(message));
 
-    rval = ber_decode(NULL, &asn_DEF_MmsPdu,
-            (void**) &mmsPdu, ByteBuffer_getBuffer(message), ByteBuffer_getSize(message));
+	    if (rval.code == RC_OK) {
 
-    if (rval.code == RC_OK) {
+	        if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
 
-        if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
+	        if (mmsPdu->present == MmsPdu_PR_unconfirmedPDU) {
 
-        if (mmsPdu->present == MmsPdu_PR_unconfirmedPDU) {
+	            if (mmsPdu->choice.unconfirmedPDU.unconfirmedService.present ==
+	                    UnconfirmedService_PR_informationReport)
+	            {
+	                char* domainId = NULL;
+                	char* variableListName = NULL;
 
-            if (mmsPdu->choice.unconfirmedPDU.unconfirmedService.present ==
-                    UnconfirmedService_PR_informationReport)
-            {
-                char* domainId = NULL;
-                char* variableListName = NULL;
 
-                InformationReport_t* report =
-                        &(mmsPdu->choice.unconfirmedPDU.unconfirmedService.choice.informationReport);
-                if (report->variableAccessSpecification.present ==
-                        VariableAccessSpecification_PR_variableListName)
-                {
-                    if (report->variableAccessSpecification.choice.variableListName.present == ObjectName_PR_vmdspecific)
-                    {
-                        int nameSize = report->variableAccessSpecification.choice.variableListName.choice.vmdspecific.size;
-                        uint8_t* buffer = report->variableAccessSpecification.choice.variableListName.choice.vmdspecific.buf;
+	                InformationReport_t* report =
+	                        &(mmsPdu->choice.unconfirmedPDU.unconfirmedService.choice.informationReport);
 
-                        variableListName = createStringFromBuffer(buffer, nameSize);
-                    }
-                    else {
-                        // Ignore TODO accept domain specific information reports (not used by IEC 61850)
-                    }
+	                if (report->variableAccessSpecification.present ==
+	                        VariableAccessSpecification_PR_variableListName)
+	                {
+	                    if (report->variableAccessSpecification.choice.variableListName.present == ObjectName_PR_vmdspecific)
+	                    {
+	                        int nameSize = report->variableAccessSpecification.choice.variableListName.choice.vmdspecific.size;
+	                        uint8_t* buffer = report->variableAccessSpecification.choice.variableListName.choice.vmdspecific.buf;
 
-                    if (self->reportHandler != NULL) {
+	                        variableListName = createStringFromBuffer(buffer, nameSize);
 
-                        int listSize = report->listOfAccessResult.list.count;
 
-                        MmsValue* values = mmsClient_parseListOfAccessResults(
-                            report->listOfAccessResult.list.array, listSize);
+							int listSize = report->listOfAccessResult.list.count;
 
-                        self->reportHandler(self->reportHandlerParameter, domainId, variableListName, values, NULL, 0);
-                    }
+							MmsValue* values = mmsClient_parseListOfAccessResults(
+								report->listOfAccessResult.list.array, listSize, true);
+
+							self->reportHandler(self->reportHandlerParameter, domainId, variableListName, values, NULL, 0);
+
+							free(variableListName);
+	                    }
+	                    else {
+	                        // Ignore domain and association specific information reports (not used by IEC 61850)
+	                    }
+
+
                 }else if (report->variableAccessSpecification.present ==
                         VariableAccessSpecification_PR_listOfVariable)
 				{
@@ -104,7 +111,7 @@ handleUnconfirmedMmsPdu(MmsConnection self, ByteBuffer* message)
 						int listSize = report->listOfAccessResult.list.count;
 
 						MmsValue* values = mmsClient_parseListOfAccessResults(
-								report->listOfAccessResult.list.array, listSize);
+								report->listOfAccessResult.list.array, listSize, true);
 
 						self->reportHandler(self->reportHandlerParameter, domainId, variableListName, values, attributes, attributesCount);
 					}
@@ -114,18 +121,348 @@ handleUnconfirmedMmsPdu(MmsConnection self, ByteBuffer* message)
                     // Ignore
                 }
 
-                if (variableListName != NULL)
-                    free(variableListName);
+	            }
 
-            }
+	        }
+	    }
+	    else {
+	        printf("handleUnconfirmedMmsPdu: error parsing PDU at %i\n", rval.consumed);
+	    }
 
+	    asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
+	}
+}
+
+static uint32_t
+getNextInvokeId(MmsConnection self)
+{
+    uint32_t nextInvokeId;
+
+    Semaphore_wait(self->lastInvokeIdLock);
+    self->lastInvokeId++;
+    nextInvokeId = self->lastInvokeId;
+    Semaphore_post(self->lastInvokeIdLock);
+
+    return nextInvokeId;
+}
+
+static bool
+checkForOutstandingCall(MmsConnection self, uint32_t invokeId)
+{
+    int i = 0;
+
+    Semaphore_wait(self->outstandingCallsLock);
+
+    for (i = 0; i < OUTSTANDING_CALLS; i++) {
+        if (self->outstandingCalls[i] == invokeId) {
+            Semaphore_post(self->outstandingCallsLock);
+            return true;
         }
     }
-    else {
-        printf("handleUnconfirmedMmsPdu: error parsing PDU\n");
+
+    Semaphore_post(self->outstandingCallsLock);
+
+    return false;
+}
+
+static bool
+addToOutstandingCalls(MmsConnection self, uint32_t invokeId)
+{
+    int i = 0;
+
+    Semaphore_wait(self->outstandingCallsLock);
+
+    for (i = 0; i < OUTSTANDING_CALLS; i++) {
+        if (self->outstandingCalls[i] == 0) {
+            self->outstandingCalls[i] = invokeId;
+            Semaphore_post(self->outstandingCallsLock);
+            return true;
+        }
     }
 
-    asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
+    Semaphore_post(self->outstandingCallsLock);
+
+    return false;
+}
+
+static void
+removeFromOutstandingCalls(MmsConnection self, uint32_t invokeId)
+{
+    int i = 0;
+
+    Semaphore_wait(self->outstandingCallsLock);
+
+    for (i = 0; i < OUTSTANDING_CALLS; i++) {
+        if (self->outstandingCalls[i] == invokeId) {
+            self->outstandingCalls[i] = 0;
+            break;
+        }
+    }
+
+    Semaphore_post(self->outstandingCallsLock);
+}
+
+
+static ByteBuffer*
+sendRequestAndWaitForResponse(MmsConnection self, uint32_t invokeId, ByteBuffer* message)
+{
+    ByteBuffer* receivedMessage = NULL;
+
+    uint64_t startTime = Hal_getTimeInMs();
+
+    uint64_t waitUntilTime = startTime + self->requestTimeout;
+
+    uint64_t currentTime = startTime;
+
+    bool success = false;
+
+    addToOutstandingCalls(self, invokeId);
+
+    IsoClientConnection_sendMessage(self->isoClient, message);
+
+    while (currentTime < waitUntilTime) {
+        uint32_t receivedInvokeId;
+
+        if (self->associationState == MMS_STATE_CLOSED)
+            goto connection_lost;
+
+        Semaphore_wait(self->lastResponseLock);
+        receivedInvokeId = self->responseInvokeId;
+        Semaphore_post(self->lastResponseLock);
+
+        if (receivedInvokeId == invokeId) {
+            receivedMessage = self->lastResponse;
+            success = true;
+            break;
+        }
+
+        Thread_sleep(10);
+
+        currentTime = Hal_getTimeInMs();
+    }
+
+    if (!success) {
+       if (DEBUG) printf("TIMEOUT for request %u: \n", invokeId);
+       self->lastResponseError = MMS_ERROR_SERVICE_TIMEOUT;
+    }
+
+connection_lost:
+
+    removeFromOutstandingCalls(self, invokeId);
+
+    return receivedMessage;
+}
+
+static void
+releaseResponse(MmsConnection self)
+{
+    IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
+
+    Semaphore_wait(self->lastResponseLock);
+    self->responseInvokeId = 0;
+    self->lastResponseError = MMS_ERROR_NONE;
+    Semaphore_post(self->lastResponseLock);
+}
+
+
+static uint32_t
+getResponseInvokeId(MmsConnection self)
+{
+    uint32_t currentInvokeId;
+
+    Semaphore_wait(self->lastResponseLock);
+    currentInvokeId = self->responseInvokeId;
+    Semaphore_post(self->lastResponseLock);
+
+    return currentInvokeId;
+}
+
+static void
+waitUntilLastResponseHasBeenProcessed(MmsConnection self)
+{
+    uint32_t currentInvokeId = getResponseInvokeId(self);
+
+    while (currentInvokeId != 0) {
+        Thread_sleep(1);
+        currentInvokeId = getResponseInvokeId(self);
+    }
+}
+
+typedef struct sMmsServiceError {
+    int errorClass;
+    int errorCode;
+} MmsServiceError;
+
+static MmsError
+convertServiceErrorToMmsError(MmsServiceError serviceError)
+{
+    MmsError mmsError;
+
+    switch(serviceError.errorClass) {
+    case 0: /* class: vmd-state */
+        mmsError = MMS_ERROR_VMDSTATE_OTHER;
+        break;
+
+    case 1: /* class: application-reference */
+        mmsError = MMS_ERROR_APPLICATION_REFERENCE_OTHER;
+        break;
+
+    case 2: /* class: definition */
+        switch (serviceError.errorCode) {
+        case 1:
+            mmsError = MMS_ERROR_DEFINITION_OBJECT_UNDEFINED;
+            break;
+        case 2:
+            mmsError = MMS_ERROR_DEFINITION_INVALID_ADDRESS;
+            break;
+        case 3:
+            mmsError = MMS_ERROR_DEFINITION_TYPE_UNSUPPORTED;
+            break;
+        case 4:
+            mmsError = MMS_ERROR_DEFINITION_TYPE_INCONSISTENT;
+            break;
+        case 5:
+            mmsError = MMS_ERROR_DEFINITION_OBJECT_EXISTS;
+            break;
+        case 6:
+            mmsError = MMS_ERROR_DEFINITION_OBJECT_ATTRIBUTE_INCONSISTENT;
+            break;
+        default:
+            mmsError = MMS_ERROR_DEFINITION_OTHER;
+            break;
+        }
+        break;
+
+    case 3: /* class: resource */
+        mmsError = MMS_ERROR_RESOURCE_OTHER;
+        break;
+
+    case 4: /* class: service */
+        mmsError = MMS_ERROR_SERVICE_OTHER;
+        break;
+
+    case 5: /* class: service-preempt */
+        mmsError = MMS_ERROR_SERVICE_PREEMPT_OTHER;
+        break;
+
+    case 6: /* class: time-resolution */
+        mmsError = MMS_ERROR_TIME_RESOLUTION_OTHER;
+        break;
+
+    case 7: /* class: access */
+        switch (serviceError.errorCode) {
+        case 1:
+            mmsError = MMS_ERROR_ACCESS_OBJECT_ACCESS_UNSUPPORTED;
+            break;
+        case 2:
+            mmsError = MMS_ERROR_ACCESS_OBJECT_NON_EXISTENT;
+            break;
+        case 3:
+            mmsError = MMS_ERROR_ACCESS_OBJECT_ACCESS_DENIED;
+            break;
+        case 4:
+            mmsError = MMS_ERROR_ACCESS_OBJECT_INVALIDATED;
+            break;
+        default:
+            mmsError = MMS_ERROR_ACCESS_OTHER;
+            break;
+        }
+        break;
+
+    default:
+        mmsError = MMS_ERROR_OTHER;
+    }
+
+    return mmsError;
+}
+
+static int
+parseServiceError(uint8_t* buffer, int bufPos, int maxLength, MmsServiceError* error)
+{
+    int endPos = bufPos + maxLength;
+    int length;
+
+    while (bufPos < endPos) {
+       uint8_t tag = buffer[bufPos++];
+       bufPos = BerDecoder_decodeLength(buffer, &length, bufPos, endPos);
+
+       if (bufPos < 0) return -1;
+
+       switch (tag) {
+       case 0xa0: /* errorClass */ {
+           uint8_t errorClassTag = buffer[bufPos++];
+           bufPos = BerDecoder_decodeLength(buffer, &length, bufPos, endPos);
+
+           if (bufPos < 0) return -1;
+
+           error->errorClass = errorClassTag - 0x80;
+           error->errorCode = BerDecoder_decodeUint32(buffer, length, bufPos);
+
+           bufPos += length;
+           }
+           break;
+       case 0x81: /* additionalCode */
+           bufPos += length; /* ignore */
+           break;
+       case 0x82: /* additionalDescription */
+           bufPos += length; /* ignore */
+           break;
+       case 0xa3: /* serviceSpecificInfo */
+           bufPos += length; /* ignore */
+           break;
+       }
+    }
+
+    return bufPos;
+}
+
+static int
+parseConfirmedErrorPDU(ByteBuffer* message, uint32_t* invokeId, MmsServiceError* serviceError)
+{
+    uint8_t* buffer = message->buffer;
+    int maxBufPos = message->size;
+    int bufPos = 0;
+    int length;
+
+    uint8_t tag = buffer[bufPos++];
+    if (tag != 0xa2) goto exit_error;
+
+    bufPos = BerDecoder_decodeLength(buffer, &length, bufPos, maxBufPos);
+    if (bufPos < 0) goto exit_error;
+
+    int endPos = bufPos + length;
+
+    if (endPos > maxBufPos) {
+        if (DEBUG) printf("parseConfirmedErrorPDU: message to short!\n");
+        goto exit_error;
+    }
+
+    while (bufPos < endPos) {
+        tag = buffer[bufPos++];
+        bufPos = BerDecoder_decodeLength(buffer, &length, bufPos, maxBufPos);
+
+        if (bufPos < 0) goto exit_error;
+
+        switch (tag) {
+        case 0x80: /* invoke Id */
+            if (invokeId != NULL)
+                *invokeId = BerDecoder_decodeUint32(buffer, length, bufPos);
+            bufPos += length;
+            break;
+        case 0x81: /* modifierPosition */
+            bufPos += length; /* ignore */
+            break;
+        case 0xa2: /* serviceError */
+            bufPos = parseServiceError(buffer, bufPos, length, serviceError);
+            if (bufPos < 0) goto exit_error;
+            break;
+        }
+    }
+
+    return bufPos;
+
+exit_error:
+    return -1;
 }
 
 static void
@@ -136,7 +473,20 @@ mmsIsoCallback(IsoIndication indication, void* parameter, ByteBuffer* payload)
 	if (DEBUG) printf("mmsIsoCallback called with indication %i\n", indication);
 
 	if (indication == ISO_IND_CLOSED) {
+	    if (DEBUG) printf("mmsIsoCallback: Connection lost or closed by client!\n");
 	    self->connectionState = MMS_CON_IDLE;
+	    self->associationState = MMS_STATE_CLOSED;
+
+	    /* Call user provided callback function */
+	    if (self->connectionLostHandler != NULL)
+	        self->connectionLostHandler(self, self->connectionLostHandlerParameter);
+
+	    return;
+	}
+
+	if (indication == ISO_IND_ASSOCIATION_FAILED) {
+	    if (DEBUG) printf("mmsIsoCallback: association failed!\n");
+	    self->connectionState = MMS_CON_ASSOCIATION_FAILED;
 	    self->associationState = MMS_STATE_CLOSED;
 	    return;
 	}
@@ -148,68 +498,108 @@ mmsIsoCallback(IsoIndication indication, void* parameter, ByteBuffer* payload)
         }
 	}
 
-    if (self->lastRequestType == MMS_REQ_INITIATE) {
-        if (indication == ISO_IND_ASSOCIATION_SUCCESS) {
-            self->connectionState = MMS_CON_ASSOCIATED;
+	uint8_t* buf = ByteBuffer_getBuffer(payload);
+
+	uint8_t tag = buf[0];
+
+	if (DEBUG) printf("MMS-PDU: %02x\n", tag);
+
+	if (tag == 0xa9) { /* initiate response PDU */
+	    if (indication == ISO_IND_ASSOCIATION_SUCCESS) {
+           self->connectionState = MMS_CON_ASSOCIATED;
         }
         else {
-            self->connectionState = MMS_CON_ASSOCIATION_FAILED;
+           self->connectionState = MMS_CON_ASSOCIATION_FAILED;
         }
         self->lastResponse = payload;
 
         return;
-    }
-
-
-	uint8_t* buf = ByteBuffer_getBuffer(payload);
-
-	if (DEBUG) printf("MMS-PDU: %02x\n", buf[0]);
-
-	if (buf[0] == 0xa3) {
+	}
+	else if (tag == 0xa3) { /* unconfirmed PDU */
 	    handleUnconfirmedMmsPdu(self, payload);
 	    IsoClientConnection_releasePayloadBuffer(self->isoClient, payload);
 	}
-	else {
-        if (self->lastRequestType == MMS_REQ_GET_NAME_LIST) {
-            self->lastResponse = payload;
-            self->connectionState = MMS_CON_RESPONSE_PENDING;
-        }
-        else if (self->lastRequestType == MMS_REQ_READ) {
-            self->lastResponse = payload;
-            self->connectionState = MMS_CON_RESPONSE_PENDING;
-        }
-        else if (self->lastRequestType == MMS_REQ_WRITE) {
-            self->lastResponse = payload;
-            self->connectionState = MMS_CON_RESPONSE_PENDING;
-        }
-        else if (self->lastRequestType == MMS_REQ_GET_VAR_ACCESS_ATTRIBUTES) {
-            self->lastResponse = payload;
-            self->connectionState = MMS_CON_RESPONSE_PENDING;
-        }
-        else if (self->lastRequestType == MMS_REQ_DEFINE_NAMED_VARIABLE_LIST) {
-            self->lastResponse = payload;
-            self->connectionState = MMS_CON_RESPONSE_PENDING;
-        }
-        else if (self->lastRequestType == MMS_REQ_DELETE_NAMED_VARIABLE_LIST) {
-            self->lastResponse = payload;
-            self->connectionState = MMS_CON_RESPONSE_PENDING;
-        }
-        else if (self->lastRequestType == MMS_REQ_GET_NAMED_VARIABLE_LIST_ATTRIBUTES) {
-            self->lastResponse = payload;
-            self->connectionState = MMS_CON_RESPONSE_PENDING;
-        }
-        else {
-            printf("Unexpected message from server");
-            IsoClientConnection_releasePayloadBuffer(self->isoClient, payload);
-        }
+	else if (tag == 0xa2) { /* confirmed error PDU */
+	    if (DEBUG) printf("Confirmed error PDU!\n");
+	    uint32_t invokeId;
+	    MmsServiceError serviceError;
+
+	    if (parseConfirmedErrorPDU(payload, &invokeId, &serviceError) < 0) {
+	        if (DEBUG) printf("Error parsing confirmedErrorPDU!\n");
+	    }
+	    else {
+            if (checkForOutstandingCall(self, invokeId)) {
+
+                waitUntilLastResponseHasBeenProcessed(self);
+
+                Semaphore_wait(self->lastResponseLock);
+                self->lastResponseError = convertServiceErrorToMmsError(serviceError);
+                self->responseInvokeId = invokeId;
+                Semaphore_post(self->lastResponseLock);
+            }
+            else {
+                if (DEBUG) printf("unexpected message from server!\n");
+                IsoClientConnection_releasePayloadBuffer(self->isoClient, payload);
+                return;
+            }
+	    }
+	}
+	else if (tag == 0xa1) { /* confirmed response PDU */
+
+	    int length;
+	    int bufPos = 1;
+
+	    bufPos = BerDecoder_decodeLength(buf, &length, bufPos, payload->size);
+	    if (bufPos == -1) goto exit_with_error;
+
+	    if (buf[bufPos++] == 0x02) {
+	        int invokeIdLength;
+
+	        bufPos = BerDecoder_decodeLength(buf, &invokeIdLength, bufPos, payload->size);
+	        if (bufPos == -1) goto exit_with_error;
+
+	        uint32_t invokeId =
+	                BerDecoder_decodeUint32(buf, invokeIdLength, bufPos);
+
+	        if (DEBUG)
+	            printf("mms_client_connection: rcvd confirmed resp - invokeId: %i length: %i bufLen: %i\n",
+	                    invokeId, length, payload->size);
+
+	        bufPos += invokeIdLength;
+
+	        if (checkForOutstandingCall(self, invokeId)) {
+
+	            waitUntilLastResponseHasBeenProcessed(self);
+
+	            Semaphore_wait(self->lastResponseLock);
+	            self->lastResponse = payload;
+	            self->lastResponseBufPos = bufPos;
+	            self->responseInvokeId = invokeId;
+	            Semaphore_post(self->lastResponseLock);
+	        }
+	        else {
+	            if (DEBUG) printf("unexpected message from server!\n");
+                IsoClientConnection_releasePayloadBuffer(self->isoClient, payload);
+                return;
+	        }
+	    }
+	    else
+	        goto exit_with_error;
 	}
 
+	return;
+
+exit_with_error:
+
+    if (DEBUG) printf("received malformed message from server!\n");
+    IsoClientConnection_releasePayloadBuffer(self->isoClient, payload);
+	return;
 }
 
 MmsConnection
 MmsConnection_create()
 {
-	MmsConnection self = calloc(1, sizeof(struct sMmsConnection));
+	MmsConnection self = (MmsConnection) calloc(1, sizeof(struct sMmsConnection));
 
 	self->parameters.dataStructureNestingLevel = -1;
 	self->parameters.maxServOutstandingCalled = -1;
@@ -217,6 +607,16 @@ MmsConnection_create()
 	self->parameters.maxPduSize = -1;
 
 	self->parameters.maxPduSize = MMS_MAXIMUM_PDU_SIZE;
+
+	self->requestTimeout = CONFIG_MMS_CONNECTION_DEFAULT_TIMEOUT;
+
+	self->lastInvokeIdLock = Semaphore_create(1);
+	self->lastResponseLock = Semaphore_create(1);
+	self->outstandingCallsLock = Semaphore_create(1);
+
+	self->lastResponseError = MMS_ERROR_NONE;
+
+	self->outstandingCalls = (uint32_t*) calloc(OUTSTANDING_CALLS, sizeof(uint32_t));
 
 	return self;
 }
@@ -230,8 +630,27 @@ MmsConnection_destroy(MmsConnection self)
 	if (self->isoConnectionParametersSelfAllocated)
 		free(self->isoParameters);
 
+	Semaphore_destroy(self->lastInvokeIdLock);
+	Semaphore_destroy(self->lastResponseLock);
+	Semaphore_destroy(self->outstandingCallsLock);
+
+	free(self->outstandingCalls);
+
 	free(self->buffer);
 	free(self);
+}
+
+void
+MmsConnection_setConnectionLostHandler(MmsConnection self, MmsConnectionLostHandler handler, void* handlerParameter)
+{
+    self->connectionLostHandler = handler;
+    self->connectionLostHandlerParameter = handlerParameter;
+}
+
+void
+MmsConnection_setRequestTimeout(MmsConnection self, uint32_t timeoutInMs)
+{
+    self->requestTimeout = timeoutInMs;
 }
 
 void
@@ -253,20 +672,36 @@ MmsConnection_setIsoConnectionParameters(MmsConnection self, IsoConnectionParame
 	self->isoParameters = params;
 }
 
+static void
+waitForConnectResponse(MmsConnection self)
+{
+    uint64_t startTime = Hal_getTimeInMs();
 
-MmsClientError
-MmsConnection_getError(MmsConnection self) {
-	return self->lastError;
+    uint64_t waitUntilTime = startTime + self->requestTimeout;
+
+    uint64_t currentTime = startTime;
+
+    while (currentTime < waitUntilTime) {
+        uint32_t receivedInvokeId;
+
+        if (self->connectionState != MMS_CON_WAITING)
+            break;
+
+        Thread_sleep(10);
+
+        currentTime = Hal_getTimeInMs();
+    }
+
 }
 
-MmsIndication
-MmsConnection_connect(MmsConnection self, MmsClientError* mmsError, char* serverName, int serverPort)
+bool
+MmsConnection_connect(MmsConnection self, MmsError* mmsError, char* serverName, int serverPort)
 {
-	self->isoClient = IsoClientConnection_create(mmsIsoCallback, (void*) self);
+	self->isoClient = IsoClientConnection_create((IsoIndicationCallback) mmsIsoCallback, (void*) self);
 
 	if (self->isoParameters == NULL) {
 		self->isoConnectionParametersSelfAllocated = 1;
-		self->isoParameters = calloc(1, sizeof(IsoConnectionParameters));
+		self->isoParameters = (IsoConnectionParameters*) calloc(1, sizeof(IsoConnectionParameters));
 	}
 
 	self->isoParameters->hostname = serverName;
@@ -275,7 +710,7 @@ MmsConnection_connect(MmsConnection self, MmsClientError* mmsError, char* server
 	if (self->parameters.maxPduSize == -1)
 		self->parameters.maxPduSize = MMS_MAXIMUM_PDU_SIZE;
 
-	self->buffer = malloc(self->parameters.maxPduSize);
+	self->buffer = (uint8_t*) malloc(self->parameters.maxPduSize);
 
 	ByteBuffer payload;
 
@@ -284,18 +719,19 @@ MmsConnection_connect(MmsConnection self, MmsClientError* mmsError, char* server
 	mmsClient_createInitiateRequest(self, &payload);
 
 	self->connectionState = MMS_CON_WAITING;
-	self->lastRequestType = MMS_REQ_INITIATE;
 
 	IsoClientConnection_associate(self->isoClient, self->isoParameters, &payload);
 
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING) {
-		Thread_sleep(1);
-	}
+	waitForConnectResponse(self);
+
+	if (DEBUG)
+	    printf("MmsConnection_connect: received response conState: %i\n", self->connectionState);
 
 	if (self->connectionState == MMS_CON_ASSOCIATED) {
 		mmsClient_parseInitiateResponse(self);
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
+
+		releaseResponse(self);
+
 		self->associationState = MMS_STATE_CONNECTED;
 	}
 	else {
@@ -304,10 +740,17 @@ MmsConnection_connect(MmsConnection self, MmsClientError* mmsError, char* server
 
 	self->connectionState = MMS_CON_IDLE;
 
-	if (self->associationState == MMS_STATE_CONNECTED)
-		return MMS_OK;
-	else
-		return MMS_ERROR;
+	if (DEBUG)
+	        printf("MmsConnection_connect: states: con %i ass %i\n", self->connectionState, self->associationState);
+
+	if (self->associationState == MMS_STATE_CONNECTED) {
+	    *mmsError = MMS_ERROR_NONE;
+		return true;
+	}
+	else {
+	    *mmsError = MMS_ERROR_CONNECTION_REJECTED;
+		return false;
+	}
 }
 
 
@@ -323,77 +766,56 @@ bool
 mmsClient_getNameListSingleRequest(
 		LinkedList* nameList,
 		MmsConnection self,
-		MmsClientError* mmsError,
+		MmsError* mmsError,
 		char* domainId,
 		MmsObjectClass objectClass,
 		bool associationSpecific,
 		char* continueAfter)
 {
-	//TODO refactor --> extract common properties of specific getNameList-functions
 	ByteBuffer payload;
 	ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
 
 	*mmsError = MMS_ERROR_NONE;
 
-	self->lastInvokeId++;
+	uint32_t invokeId = getNextInvokeId(self);
 
 	if (associationSpecific)
-		mmsClient_createMmsGetNameListRequestAssociationSpecific(self->lastInvokeId,
+		mmsClient_createMmsGetNameListRequestAssociationSpecific(invokeId,
 				&payload, continueAfter);
 	else {
 
 		if (domainId == NULL)
-			mmsClient_createMmsGetNameListRequestVMDspecific(self->lastInvokeId,
+			mmsClient_createMmsGetNameListRequestVMDspecific(invokeId,
 					&payload, continueAfter);
 		else
-			mmsClient_createGetNameListRequestDomainSpecific(self->lastInvokeId, domainId,
+			mmsClient_createGetNameListRequestDomainSpecific(invokeId, domainId,
 					&payload, objectClass, continueAfter);
 	}
 
-	self->lastRequestType = MMS_REQ_GET_NAME_LIST;
-	self->connectionState = MMS_CON_WAITING;
+	ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
 
-	IsoClientConnection_sendMessage(self->isoClient, &payload);
+	bool moreFollows = false;
 
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING)
-		Thread_sleep(1);
+//    if (self->lastResponseError != MMS_ERROR_NONE)
+//        *mmsError = self->lastResponseError;
 
-	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
-		uint32_t invokeId = 0;
-		bool moreFollows = mmsClient_parseGetNameListResponse(nameList, self->lastResponse,
-																	&invokeId);
 
-		if (invokeId != self->lastInvokeId) {
-			printf("Invalid invoke ID\n");
 
-			*mmsError = MMS_ERROR_SERVICE_ERROR;
+    //else
+    if (responseMessage != NULL)
+        moreFollows = mmsClient_parseGetNameListResponse(nameList, self->lastResponse, NULL);
 
-			if (*nameList != NULL) {
-				LinkedList_destroy(&nameList);
-			}
+    releaseResponse(self);
 
-			*nameList = NULL;
+    if (self->associationState == MMS_STATE_CLOSED)
+        *mmsError = MMS_ERROR_CONNECTION_LOST;
 
-			return false;
-		}
-
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
-		self->connectionState = MMS_CON_IDLE;
-		return moreFollows;
-	}
-	else {
-	    if (self->associationState == MMS_STATE_CLOSED)
-	        *mmsError = MMS_ERROR_CONNECTION_LOST;
-	}
-
-	self->connectionState = MMS_CON_IDLE;
-	return false;
+	return moreFollows;
 }
 
 
 LinkedList /* <char*> */
-mmsClient_getNameList(MmsConnection self, MmsClientError *mmsError,
+mmsClient_getNameList(MmsConnection self, MmsError *mmsError,
 		char* domainId,
 		char objectClass,
 		bool associationSpecific)
@@ -408,10 +830,9 @@ mmsClient_getNameList(MmsConnection self, MmsClientError *mmsError,
 	while ((moreFollows == true) && (list != NULL)) {
 		LinkedList lastElement = LinkedList_getLastElement(list);
 
-		char* lastIdentifier = lastElement->data;
+		char* lastIdentifier = (char*) lastElement->data;
 
-		if (DEBUG) 
-			printf("getNameList: identifier: %s\n", lastIdentifier);
+		if (DEBUG) printf("getNameList: identifier: %s\n", lastIdentifier);
 
 		moreFollows = mmsClient_getNameListSingleRequest(&list, self, mmsError, domainId,
 							 objectClass, associationSpecific, lastIdentifier);
@@ -421,67 +842,57 @@ mmsClient_getNameList(MmsConnection self, MmsClientError *mmsError,
 }
 
 LinkedList /* <char*> */
-MmsConnection_getDomainNames(MmsConnection self, MmsClientError* mmsError) {
+MmsConnection_getDomainNames(MmsConnection self, MmsError* mmsError) {
 	return mmsClient_getNameList(self, mmsError, NULL, MMS_NAMED_VARIABLE, false);
 }
 
 LinkedList /* <char*> */
-MmsConnection_getDomainVariableNames(MmsConnection self, MmsClientError* mmsError, char* domainId) {
+MmsConnection_getDomainVariableNames(MmsConnection self, MmsError* mmsError, char* domainId) {
 	return mmsClient_getNameList(self, mmsError, domainId, MMS_NAMED_VARIABLE, false);
 }
 
 LinkedList /* <char*> */
-MmsConnection_getDomainVariableListNames(MmsConnection self, MmsClientError* mmsError, char* domainId) {
+MmsConnection_getDomainVariableListNames(MmsConnection self, MmsError* mmsError, char* domainId) {
 	return mmsClient_getNameList(self, mmsError, domainId, MMS_NAMED_VARIABLE_LIST, false);
 }
 
 LinkedList /* <char*> */
-MmsConnection_getVariableListNamesAssociationSpecific(MmsConnection self, MmsClientError* mmsError)
+MmsConnection_getVariableListNamesAssociationSpecific(MmsConnection self, MmsError* mmsError)
 {
 	return mmsClient_getNameList(self, mmsError, NULL, MMS_NAMED_VARIABLE_LIST, true);
 }
 
 MmsValue*
-MmsConnection_readVariable(MmsConnection self, MmsClientError* mmsError,
-		char* domainId, char* itemId)
+MmsConnection_readVariable(MmsConnection self, MmsError* mmsError,
+        char* domainId, char* itemId)
 {
-	ByteBuffer payload;
-	MmsValue* value = NULL;
-	ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
+    ByteBuffer payload;
+    MmsValue* value = NULL;
+    ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
 
-	*mmsError = MMS_ERROR_NONE;
+    *mmsError = MMS_ERROR_NONE;
 
-	self->lastInvokeId++;
+    uint32_t invokeId = getNextInvokeId(self);
 
-	mmsClient_createReadRequest(domainId, itemId, &payload);
+    mmsClient_createReadRequest(invokeId, domainId, itemId, &payload);
 
-	self->lastRequestType = MMS_REQ_READ;
-	self->connectionState = MMS_CON_WAITING;
+    ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
 
-	IsoClientConnection_sendMessage(self->isoClient, &payload);
+    if (self->lastResponseError != MMS_ERROR_NONE)
+        *mmsError = self->lastResponseError;
+    else if (responseMessage != NULL)
+        value = mmsClient_parseReadResponse(self->lastResponse, NULL, false);
 
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING)
-		Thread_sleep(1);;
+    releaseResponse(self);
 
-	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
-		uint32_t invokeId;
+    if (self->associationState == MMS_STATE_CLOSED)
+        *mmsError = MMS_ERROR_CONNECTION_LOST;
 
-		value = mmsClient_parseReadResponse(self->lastResponse, &invokeId);
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
-	}
-	else {
-	    if (self->associationState == MMS_STATE_CLOSED)
-	        *mmsError = MMS_ERROR_CONNECTION_LOST;
-	}
-
-	self->connectionState = MMS_CON_IDLE;
-	return value;
+    return value;
 }
 
-
 MmsValue*
-MmsConnection_readArrayElements(MmsConnection self, MmsClientError* mmsError,
+MmsConnection_readArrayElements(MmsConnection self, MmsError* mmsError,
 		char* domainId, char* itemId,
 		uint32_t startIndex, uint32_t numberOfElements)
 {
@@ -491,38 +902,28 @@ MmsConnection_readArrayElements(MmsConnection self, MmsClientError* mmsError,
 
 	*mmsError = MMS_ERROR_NONE;
 
-	self->lastInvokeId++;
+	uint32_t invokeId = getNextInvokeId(self);
 
-	mmsClient_createReadRequestAlternateAccessIndex(domainId, itemId, startIndex, numberOfElements,
-			&payload);
+	mmsClient_createReadRequestAlternateAccessIndex(invokeId, domainId, itemId, startIndex,
+	        numberOfElements, &payload);
 
-	self->lastRequestType = MMS_REQ_READ;
-	self->connectionState = MMS_CON_WAITING;
+	ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
 
-	IsoClientConnection_sendMessage(self->isoClient, &payload);
+    if (self->lastResponseError != MMS_ERROR_NONE)
+        *mmsError = self->lastResponseError;
+    else if (responseMessage != NULL)
+        value = mmsClient_parseReadResponse(self->lastResponse, NULL, true);
 
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING)
-		Thread_sleep(1);
+    releaseResponse(self);
 
+    if (self->associationState == MMS_STATE_CLOSED)
+        *mmsError = MMS_ERROR_CONNECTION_LOST;
 
-	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
-		uint32_t invokeId;
-
-		value = mmsClient_parseReadResponse(self->lastResponse, &invokeId);
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
-	}
-	else {
-	    if (self->associationState == MMS_STATE_CLOSED)
-	        *mmsError = MMS_ERROR_CONNECTION_LOST;
-	}
-
-	self->connectionState = MMS_CON_IDLE;
 	return value;
 }
 
 MmsValue*
-MmsConnection_readMultipleVariables(MmsConnection self, MmsClientError* mmsError,
+MmsConnection_readMultipleVariables(MmsConnection self, MmsError* mmsError,
 		char* domainId, LinkedList /*<char*>*/ items)
 {
 	ByteBuffer payload;
@@ -531,37 +932,27 @@ MmsConnection_readMultipleVariables(MmsConnection self, MmsClientError* mmsError
 
 	*mmsError = MMS_ERROR_NONE;
 
-	self->lastInvokeId++;
+	uint32_t invokeId = getNextInvokeId(self);
 
-	//TODO handle invokeID
-	mmsClient_createReadRequestMultipleValues(domainId, items, &payload);
+	mmsClient_createReadRequestMultipleValues(invokeId, domainId, items, &payload);
 
-	self->lastRequestType = MMS_REQ_READ;
-	self->connectionState = MMS_CON_WAITING;
+    ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
 
-	IsoClientConnection_sendMessage(self->isoClient, &payload);
+    if (self->lastResponseError != MMS_ERROR_NONE)
+        *mmsError = self->lastResponseError;
+    else if (responseMessage != NULL)
+        value = mmsClient_parseReadResponse(self->lastResponse, NULL, true);
 
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING)
-		Thread_sleep(1);
+    releaseResponse(self);
 
-	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
-		uint32_t invokeId;
+    if (self->associationState == MMS_STATE_CLOSED)
+        *mmsError = MMS_ERROR_CONNECTION_LOST;
 
-		value = mmsClient_parseReadResponse(self->lastResponse, &invokeId);
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
-	}
-	else {
-	    if (self->associationState == MMS_STATE_CLOSED)
-	        *mmsError = MMS_ERROR_CONNECTION_LOST;
-	}
-
-	self->connectionState = MMS_CON_IDLE;
 	return value;
 }
 
 MmsValue*
-MmsConnection_readNamedVariableListValues(MmsConnection self, MmsClientError* mmsError,
+MmsConnection_readNamedVariableListValues(MmsConnection self, MmsError* mmsError,
 		char* domainId, char* listName,
 		bool specWithResult)
 {
@@ -572,38 +963,31 @@ MmsConnection_readNamedVariableListValues(MmsConnection self, MmsClientError* mm
 
 	*mmsError = MMS_ERROR_NONE;
 
-	self->lastInvokeId++;
+	uint32_t invokeId = getNextInvokeId(self);
 
-	mmsClient_createReadNamedVariableListRequest(self->lastInvokeId, domainId, listName,
+	mmsClient_createReadNamedVariableListRequest(invokeId, domainId, listName,
 			&payload, specWithResult);
 
-	self->lastRequestType = MMS_REQ_READ;
-	self->connectionState = MMS_CON_WAITING;
+	ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
 
-	IsoClientConnection_sendMessage(self->isoClient, &payload);
-
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING)
-		Thread_sleep(1);
-
-	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
-		uint32_t invokeId;
-
-		value = mmsClient_parseReadResponse(self->lastResponse, &invokeId);
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
+	if (self->lastResponseError != MMS_ERROR_NONE) {
+	    *mmsError = self->lastResponseError;
 	}
-	else {
-	    if (self->associationState == MMS_STATE_CLOSED)
-	        *mmsError = MMS_ERROR_CONNECTION_LOST;
+	else if (responseMessage != NULL) {
+		value = mmsClient_parseReadResponse(self->lastResponse, NULL, true);
 	}
 
-	self->connectionState = MMS_CON_IDLE;
+	releaseResponse(self);
+
+	if (self->associationState == MMS_STATE_CLOSED)
+	    *mmsError = MMS_ERROR_CONNECTION_LOST;
+
 	return value;
 }
 
 MmsValue*
 MmsConnection_readNamedVariableListValuesAssociationSpecific(
-		MmsConnection self, MmsClientError* mmsError,
+		MmsConnection self, MmsError* mmsError,
 		char* listName,
 		bool specWithResult)
 {
@@ -614,37 +998,29 @@ MmsConnection_readNamedVariableListValuesAssociationSpecific(
 
 	*mmsError = MMS_ERROR_NONE;
 
-	self->lastInvokeId++;
+	uint32_t invokeId = getNextInvokeId(self);
 
-	mmsClient_createReadAssociationSpecificNamedVariableListRequest(self->lastInvokeId, listName,
+	mmsClient_createReadAssociationSpecificNamedVariableListRequest(invokeId, listName,
 			&payload, specWithResult);
 
-	self->lastRequestType = MMS_REQ_READ;
-	self->connectionState = MMS_CON_WAITING;
+	ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
 
-	IsoClientConnection_sendMessage(self->isoClient, &payload);
+    if (self->lastResponseError != MMS_ERROR_NONE)
+        *mmsError = self->lastResponseError;
+    else if (responseMessage != NULL)
+        value = mmsClient_parseReadResponse(self->lastResponse, NULL, true);
 
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING)
-		Thread_sleep(1);
+    releaseResponse(self);
 
-	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
-		uint32_t invokeId;
+    if (self->associationState == MMS_STATE_CLOSED)
+        *mmsError = MMS_ERROR_CONNECTION_LOST;
 
-		value = mmsClient_parseReadResponse(self->lastResponse, &invokeId);
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
-	}
-	else {
-	    if (self->associationState == MMS_STATE_CLOSED)
-	        *mmsError = MMS_ERROR_CONNECTION_LOST;
-	}
 
-	self->connectionState = MMS_CON_IDLE;
 	return value;
 }
 
-LinkedList /* <char*> */
-MmsConnection_readNamedVariableListDirectory(MmsConnection self,  MmsClientError* mmsError,
+LinkedList /* <MmsVariableAccessSpecification*> */
+MmsConnection_readNamedVariableListDirectory(MmsConnection self,  MmsError* mmsError,
 		char* domainId, char* listName,	bool* deletable)
 {
 	ByteBuffer payload;
@@ -654,41 +1030,29 @@ MmsConnection_readNamedVariableListDirectory(MmsConnection self,  MmsClientError
 
 	LinkedList attributes = NULL;
 
-	self->lastInvokeId++;
+	uint32_t invokeId = getNextInvokeId(self);
 
-	mmsClient_createGetNamedVariableListAttributesRequest(self->lastInvokeId, &payload, domainId,
+	mmsClient_createGetNamedVariableListAttributesRequest(invokeId, &payload, domainId,
 			listName);
 
-	self->lastRequestType = MMS_REQ_GET_NAMED_VARIABLE_LIST_ATTRIBUTES;
-	self->connectionState = MMS_CON_WAITING;
+	ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
 
-	IsoClientConnection_sendMessage(self->isoClient, &payload);
+    if (self->lastResponseError != MMS_ERROR_NONE)
+        *mmsError = self->lastResponseError;
+    else if (responseMessage != NULL)
+        attributes = mmsClient_parseGetNamedVariableListAttributesResponse(self->lastResponse, NULL,
+                        deletable);
 
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING)
-		Thread_sleep(1);
+    releaseResponse(self);
 
-
-	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
-		uint32_t invokeId;
-
-		attributes = mmsClient_parseGetNamedVariableListAttributesResponse(self->lastResponse, &invokeId,
-				deletable);
-
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
-	}
-	else {
-	    if (self->associationState == MMS_STATE_CLOSED)
-	        *mmsError = MMS_ERROR_CONNECTION_LOST;
-	}
-
-	self->connectionState = MMS_CON_IDLE;
+    if (self->associationState == MMS_STATE_CLOSED)
+        *mmsError = MMS_ERROR_CONNECTION_LOST;
 
 	return attributes;
 }
 
 MmsIndication
-MmsConnection_defineNamedVariableList(MmsConnection self,  MmsClientError* mmsError,
+MmsConnection_defineNamedVariableList(MmsConnection self,  MmsError* mmsError,
 		char* domainId, char* listName, LinkedList variableSpecs)
 {
 	ByteBuffer payload;
@@ -696,86 +1060,62 @@ MmsConnection_defineNamedVariableList(MmsConnection self,  MmsClientError* mmsEr
 
 	*mmsError = MMS_ERROR_NONE;
 
-	self->lastInvokeId++;
+	uint32_t invokeId = getNextInvokeId(self);
 
-	mmsClient_createDefineNamedVariableListRequest(self->lastInvokeId, &payload, domainId,
+	mmsClient_createDefineNamedVariableListRequest(invokeId, &payload, domainId,
 			listName, variableSpecs, false);
-
-
-	self->lastRequestType = MMS_REQ_DEFINE_NAMED_VARIABLE_LIST;
-	self->connectionState = MMS_CON_WAITING;
-
-	IsoClientConnection_sendMessage(self->isoClient, &payload);
-
-
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING)
-		Thread_sleep(1);
 
 	MmsIndication indication = MMS_ERROR;
 
-	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
-		uint32_t invokeId;
+	ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
 
-		indication = mmsClient_parseDefineNamedVariableResponse(self->lastResponse, &invokeId);
 
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
-	}
-	else {
-	    if (self->associationState == MMS_STATE_CLOSED)
-	        *mmsError = MMS_ERROR_CONNECTION_LOST;
-	}
+    if (self->lastResponseError != MMS_ERROR_NONE)
+        *mmsError = self->lastResponseError;
+    else if (responseMessage != NULL)
+        indication = mmsClient_parseDefineNamedVariableResponse(self->lastResponse, NULL);
 
-	self->connectionState = MMS_CON_IDLE;
+    releaseResponse(self);
+
+    if (self->associationState == MMS_STATE_CLOSED)
+        *mmsError = MMS_ERROR_CONNECTION_LOST;
 
 	return indication;
 }
 
 MmsIndication
 MmsConnection_defineNamedVariableListAssociationSpecific(MmsConnection self,
-		 MmsClientError* mmsError, char* listName, LinkedList variableSpecs)
+        MmsError* mmsError, char* listName, LinkedList variableSpecs)
 {
 	ByteBuffer payload;
 	ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
 
 	*mmsError = MMS_ERROR_NONE;
 
-	self->lastInvokeId++;
+	uint32_t invokeId = getNextInvokeId(self);
 
-	mmsClient_createDefineNamedVariableListRequest(self->lastInvokeId, &payload, NULL,
+	mmsClient_createDefineNamedVariableListRequest(invokeId, &payload, NULL,
 			listName, variableSpecs, true);
 
-
-	self->lastRequestType = MMS_REQ_DEFINE_NAMED_VARIABLE_LIST;
-	self->connectionState = MMS_CON_WAITING;
-
-	IsoClientConnection_sendMessage(self->isoClient, &payload);
-
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING)
-		Thread_sleep(1);
+	ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
 
 	MmsIndication indication = MMS_ERROR;
 
-	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
-		uint32_t invokeId;
+    if (self->lastResponseError != MMS_ERROR_NONE)
+        *mmsError = self->lastResponseError;
+    else if (responseMessage != NULL)
+        indication = mmsClient_parseDefineNamedVariableResponse(self->lastResponse, NULL);
 
-		indication = mmsClient_parseDefineNamedVariableResponse(self->lastResponse, &invokeId);
+    releaseResponse(self);
 
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
-	}
-	else {
-	    if (self->associationState == MMS_STATE_CLOSED)
-	        *mmsError = MMS_ERROR_CONNECTION_LOST;
-	}
-
-	self->connectionState = MMS_CON_IDLE;
+    if (self->associationState == MMS_STATE_CLOSED)
+              *mmsError = MMS_ERROR_CONNECTION_LOST;
 
 	return indication;
 }
 
 MmsIndication
-MmsConnection_deleteNamedVariableList(MmsConnection self,  MmsClientError* mmsError,
+MmsConnection_deleteNamedVariableList(MmsConnection self,  MmsError* mmsError,
 		char* domainId, char* listName)
 {
 	ByteBuffer payload;
@@ -783,232 +1123,244 @@ MmsConnection_deleteNamedVariableList(MmsConnection self,  MmsClientError* mmsEr
 
 	*mmsError = MMS_ERROR_NONE;
 
-	self->lastInvokeId++;
+	uint32_t invokeId = getNextInvokeId(self);
 
-	mmsClient_createDeleteNamedVariableListRequest(self->lastInvokeId, &payload, domainId, listName);
-
-	self->lastRequestType = MMS_REQ_DELETE_NAMED_VARIABLE_LIST;
-	self->connectionState = MMS_CON_WAITING;
-
-	IsoClientConnection_sendMessage(self->isoClient, &payload);
-
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING)
-		Thread_sleep(1);
+	mmsClient_createDeleteNamedVariableListRequest(invokeId, &payload, domainId, listName);
 
 	MmsIndication indication = MMS_ERROR;
 
-	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
-		uint32_t invokeId;
+	ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
 
-		indication = mmsClient_parseDeleteNamedVariableListResponse(self->lastResponse, &invokeId);
+    if (self->lastResponseError != MMS_ERROR_NONE)
+        *mmsError = self->lastResponseError;
+    else if (responseMessage != NULL)
+        indication = mmsClient_parseDeleteNamedVariableListResponse(self->lastResponse,NULL);
 
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
-	}
-	else {
-	    if (self->associationState == MMS_STATE_CLOSED)
-	        *mmsError = MMS_ERROR_CONNECTION_LOST;
-	}
+    releaseResponse(self);
 
-	self->connectionState = MMS_CON_IDLE;
+    if (self->associationState == MMS_STATE_CLOSED)
+        *mmsError = MMS_ERROR_CONNECTION_LOST;
 
 	return indication;
 }
 
 MmsIndication
 MmsConnection_deleteAssociationSpecificNamedVariableList(MmsConnection self,
-		 MmsClientError* mmsError, char* listName)
+        MmsError* mmsError, char* listName)
 {
 	ByteBuffer payload;
 	ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
 
 	*mmsError = MMS_ERROR_NONE;
 
-	self->lastInvokeId++;
+	uint32_t invokeId = getNextInvokeId(self);
 
 	mmsClient_createDeleteAssociationSpecificNamedVariableListRequest(
-			self->lastInvokeId, &payload, listName);
-
-	self->lastRequestType = MMS_REQ_DELETE_NAMED_VARIABLE_LIST;
-	self->connectionState = MMS_CON_WAITING;
-
-	IsoClientConnection_sendMessage(self->isoClient, &payload);
-
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING)
-		Thread_sleep(1);
+	        invokeId, &payload, listName);
 
 	MmsIndication indication = MMS_ERROR;
 
-	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
-		uint32_t invokeId;
+	ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
 
-		indication = mmsClient_parseDeleteNamedVariableListResponse(self->lastResponse, &invokeId);
+    if (self->lastResponseError != MMS_ERROR_NONE)
+        *mmsError = self->lastResponseError;
+    else if (responseMessage != NULL)
+        indication = mmsClient_parseDeleteNamedVariableListResponse(self->lastResponse, NULL);
 
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
-	}
-	else {
-	    if (self->associationState == MMS_STATE_CLOSED)
-	        *mmsError = MMS_ERROR_CONNECTION_LOST;
-	}
+    releaseResponse(self);
 
-
-	self->connectionState = MMS_CON_IDLE;
+    if (self->associationState == MMS_STATE_CLOSED)
+        *mmsError = MMS_ERROR_CONNECTION_LOST;
 
 	return indication;
 }
 
-MmsTypeSpecification*
-MmsConnection_getVariableAccessAttributes(MmsConnection self,  MmsClientError* mmsError,
+MmsVariableSpecification*
+MmsConnection_getVariableAccessAttributes(MmsConnection self,  MmsError* mmsError,
 		char* domainId, char* itemId)
 {
 	ByteBuffer payload;
 	ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
-	MmsTypeSpecification* typeSpec = NULL;
+	MmsVariableSpecification* typeSpec = NULL;
 
 	*mmsError = MMS_ERROR_NONE;
 
-	self->lastInvokeId++;
+	uint32_t invokeId = getNextInvokeId(self);
 
-	mmsClient_createGetVariableAccessAttributesRequest(domainId, itemId, &payload);
+	mmsClient_createGetVariableAccessAttributesRequest(invokeId, domainId, itemId, &payload);
 
-	self->lastRequestType = MMS_REQ_GET_VAR_ACCESS_ATTRIBUTES;
-	self->connectionState = MMS_CON_WAITING;
+	ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
 
-	IsoClientConnection_sendMessage(self->isoClient, &payload);
+    if (self->lastResponseError != MMS_ERROR_NONE)
+        *mmsError = self->lastResponseError;
+    else if (responseMessage != NULL)
+        typeSpec = mmsClient_parseGetVariableAccessAttributesResponse(self->lastResponse, NULL);
 
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING)
-		Thread_sleep(1);
+    releaseResponse(self);
 
-	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
+    if (self->associationState == MMS_STATE_CLOSED)
+        *mmsError = MMS_ERROR_CONNECTION_LOST;
 
-		uint32_t invokeId;
-
-		typeSpec = mmsClient_parseGetVariableAccessAttributesResponse(self->lastResponse,
-				&invokeId);
-
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
-	}
-	else {
-	    if (self->associationState == MMS_STATE_CLOSED)
-	        *mmsError = MMS_ERROR_CONNECTION_LOST;
-	}
-
-	self->connectionState = MMS_CON_IDLE;
 	return typeSpec;
 }
 
+MmsServerIdentity*
+MmsConnection_identify(MmsConnection self, MmsError* mmsError)
+{
+    ByteBuffer payload;
+    ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
+    MmsServerIdentity* identity = NULL;
+
+    *mmsError = MMS_ERROR_NONE;
+
+    uint32_t invokeId = getNextInvokeId(self);
+
+    mmsClient_createIdentifyRequest(invokeId, &payload);
+
+    ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
+
+    if (self->lastResponseError != MMS_ERROR_NONE)
+        *mmsError = self->lastResponseError;
+    else if (responseMessage != NULL)
+        identity = mmsClient_parseIdentifyResponse(self->lastResponse, NULL);
+
+    releaseResponse(self);
+
+    if (self->associationState == MMS_STATE_CLOSED)
+        *mmsError = MMS_ERROR_CONNECTION_LOST;
+
+    return identity;
+}
+
 MmsIndication
-MmsConnection_writeVariable(MmsConnection self, MmsClientError* clientError,
+MmsConnection_writeVariable(MmsConnection self, MmsError* mmsError,
 		char* domainId, char* itemId,
 		MmsValue* value)
 {
-	MmsIndication indication = MMS_ERROR;
+    MmsIndication indication = MMS_ERROR;
 	ByteBuffer payload;
 	ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
 
-	*clientError = MMS_ERROR_NONE;
+	*mmsError = MMS_ERROR_NONE;
 
-	self->lastInvokeId++;
+	uint32_t invokeId = getNextInvokeId(self);
 
-	mmsClient_createWriteRequest(self->lastInvokeId, domainId, itemId, value, &payload);
+	mmsClient_createWriteRequest(invokeId, domainId, itemId, value, &payload);
 
-	self->lastRequestType = MMS_REQ_WRITE;
-	self->connectionState = MMS_CON_WAITING;
+	ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
 
-	IsoClientConnection_sendMessage(self->isoClient, &payload);
+    if (self->lastResponseError != MMS_ERROR_NONE)
+        *mmsError = self->lastResponseError;
+    else if (responseMessage != NULL)
+        indication = mmsClient_parseWriteResponse(self->lastResponse);
 
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING)
-		Thread_sleep(1);
+    releaseResponse(self);
 
-	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
-		indication = mmsClient_parseWriteResponse(self->lastResponse);
+    if (self->associationState == MMS_STATE_CLOSED)
+        *mmsError = MMS_ERROR_CONNECTION_LOST;
 
-		if (indication != MMS_OK)
-		    *clientError = MMS_ERROR_SERVICE_ERROR;
-
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
-	}
-	else {
-	    if (self->associationState == MMS_STATE_CLOSED)
-	        *clientError = MMS_ERROR_CONNECTION_LOST;
-	}
-
-	self->connectionState = MMS_CON_IDLE;
 	return indication;
 }
 
 MmsIndication
-MmsConnection_writeListVariable(MmsConnection self, MmsClientError* clientError,
-		char* domainId, LinkedList itemsId,
-		MmsValue* values)
+MmsConnection_writeMultipleVariables(MmsConnection self, MmsError* mmsError, char* domainId,
+        LinkedList /*<char*>*/ items,
+        LinkedList /* <MmsValue*> */ values,
+        /* OUTPUT */ LinkedList* /* <MmsValue*> */ accessResults)
 {
-	MmsIndication indication = MMS_ERROR;
-	ByteBuffer payload;
-	ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
+    MmsIndication indication = MMS_ERROR;
+    ByteBuffer payload;
+    ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
 
-	*clientError = MMS_ERROR_NONE;
+    *mmsError = MMS_ERROR_NONE;
 
-	self->lastInvokeId++;
+    uint32_t invokeId = getNextInvokeId(self);
 
-	mmsClient_createWriteListRequest(self->lastInvokeId, domainId, itemsId, values, &payload);
+    mmsClient_createWriteMultipleItemsRequest(invokeId, domainId, items, values, &payload);
 
-	self->lastRequestType = MMS_REQ_WRITE;
-	self->connectionState = MMS_CON_WAITING;
+    ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
 
-	IsoClientConnection_sendMessage(self->isoClient, &payload);
+    if (self->lastResponseError != MMS_ERROR_NONE)
+        *mmsError = self->lastResponseError;
+    else if (responseMessage != NULL) {
 
-	/* poll callback handler TODO poll with timeout */
-	while (self->connectionState == MMS_CON_WAITING)
-		Thread_sleep(1);
+        int numberOfItems = LinkedList_size(items);
 
-	if (self->connectionState == MMS_CON_RESPONSE_PENDING) {
-		indication = mmsClient_parseWriteResponse(self->lastResponse);
+        indication = mmsClient_parseWriteMultipleItemsResponse(self->lastResponse, numberOfItems, accessResults);
 
-		if (indication != MMS_OK)
-		    *clientError = MMS_ERROR_SERVICE_ERROR;
+        if (indication != MMS_OK)
+            *mmsError = MMS_ERROR_PARSING_RESPONSE;
 
-		IsoClientConnection_releasePayloadBuffer(self->isoClient, self->lastResponse);
-	}
-	else {
-	    if (self->associationState == MMS_STATE_CLOSED)
-	        *clientError = MMS_ERROR_CONNECTION_LOST;
-	}
+    }
 
-	self->connectionState = MMS_CON_IDLE;
-	return indication;
+    releaseResponse(self);
+
+    if (self->associationState == MMS_STATE_CLOSED)
+        *mmsError = MMS_ERROR_CONNECTION_LOST;
+
+    return indication;
 }
 
-MmsVariableSpecification*
-MmsVariableSpecification_create(char* domainId, char* itemId)
+void
+MmsServerIdentity_destroy(MmsServerIdentity* self)
 {
-	MmsVariableSpecification* varSpec = malloc(sizeof(MmsVariableSpecification));
+    if (self->modelName != NULL)
+        free(self->modelName);
 
-	varSpec->domainId = domainId;
-	varSpec->itemId = itemId;
-	varSpec->arrayIndex = -1;
-	varSpec->componentName = NULL;
+    if (self->vendorName != NULL)
+        free(self->vendorName);
 
-	return varSpec;
+    if (self->revision != NULL)
+        free(self->revision);
+
+    free(self);
 }
 
-MmsVariableSpecification*
-MmsVariableSpecification_createAlternateAccess(char* domainId, char* itemId, int32_t index,
+MmsVariableAccessSpecification*
+MmsVariableAccessSpecification_create(char* domainId, char* itemId)
+{
+	MmsVariableAccessSpecification* self = (MmsVariableAccessSpecification*) 
+				malloc(sizeof(MmsVariableAccessSpecification));
+
+	self->domainId = domainId;
+	self->itemId = itemId;
+	self->arrayIndex = -1;
+	self->componentName = NULL;
+
+	return self;
+}
+
+MmsVariableAccessSpecification*
+MmsVariableAccessSpecification_createAlternateAccess(char* domainId, char* itemId, int32_t index,
 		char* componentName)
 {
-	MmsVariableSpecification* varSpec = malloc(sizeof(MmsVariableSpecification));
+	MmsVariableAccessSpecification* self = (MmsVariableAccessSpecification*) 
+		malloc(sizeof(MmsVariableAccessSpecification));
 
-	varSpec->domainId = domainId;
-	varSpec->itemId = itemId;
-	varSpec->arrayIndex = index;
-	varSpec->componentName = componentName;
+	self->domainId = domainId;
+	self->itemId = itemId;
+	self->arrayIndex = index;
+	self->componentName = componentName;
 
-	return varSpec;
+	return self;
 }
 
-MmsIndication MmsConnection_sendUnconfirmedPDU(MmsConnection self, MmsClientError* clientError,char* domainId, char* itemId, uint32_t timeStamp
+void
+MmsVariableAccessSpecification_destroy(MmsVariableAccessSpecification* self)
+{
+	if (self->domainId != NULL)
+		free(self->domainId);
+
+	if (self->itemId != NULL)
+		free(self->itemId);
+
+	if (self->componentName != NULL)
+		free (self->componentName);
+
+	free(self);
+}
+
+MmsIndication MmsConnection_sendUnconfirmedPDU(MmsConnection self, MmsError* clientError,char* domainId, char* itemId, uint32_t timeStamp
 		) {
 	ByteBuffer payload;
 	ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
@@ -1016,7 +1368,7 @@ MmsIndication MmsConnection_sendUnconfirmedPDU(MmsConnection self, MmsClientErro
 	*clientError = MMS_ERROR_NONE;
 
 	if (domainId == NULL || itemId==NULL) {
-		*clientError = MMS_ERROR_SERVICE_ERROR;
+		*clientError = MMS_ERROR_SERVICE_TIMEOUT;
 		return MMS_ERROR;
 	}
 
@@ -1027,5 +1379,31 @@ MmsIndication MmsConnection_sendUnconfirmedPDU(MmsConnection self, MmsClientErro
 	IsoClientConnection_sendMessage(self->isoClient, &payload);
 
 	self->connectionState = MMS_CON_IDLE;
+
+	/*
+
+	uint32_t invokeId = getNextInvokeId(self);
+
+
+    MmsError mmsError;
+	printf("sending unconfirmed\n");
+	ByteBuffer* responseMessage = sendRequestAndWaitForResponse(self, invokeId, &payload);
+	printf("received response\n");
+
+    if (self->lastResponseError != MMS_ERROR_NONE)
+        *clientError = self->lastResponseError;
+    else if (responseMessage != NULL) {
+
+		printf("message unconfirmed \n");
+    }
+
+    releaseResponse(self);
+
+    if (self->associationState == MMS_STATE_CLOSED)
+        *clientError = MMS_ERROR_CONNECTION_LOST;
+
+		*/
 	return MMS_OK;
 }
+
+

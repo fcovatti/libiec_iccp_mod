@@ -31,10 +31,14 @@
 #include "reporting.h"
 #include "mms_mapping_internal.h"
 
+#ifndef DEBUG_IED_SERVER
+#define DEBUG_IED_SERVER 0
+#endif
+
 ReportControl*
 ReportControl_create(bool buffered)
 {
-    ReportControl* self = malloc(sizeof(ReportControl));
+    ReportControl* self = (ReportControl*) malloc(sizeof(ReportControl));
     self->name = NULL;
     self->domain = NULL;
     self->rcbValues = NULL;
@@ -45,6 +49,7 @@ ReportControl_create(bool buffered)
     self->gi = false;
     self->inclusionField = NULL;
     self->dataSet = NULL;
+    self->isDynamicDataSet = false;
     self->clientConnection = NULL;
     self->intgPd = 0;
     self->sqNum = 0;
@@ -53,6 +58,7 @@ ReportControl_create(bool buffered)
     self->triggered = false;
     self->timeOfEntry = NULL;
     self->reservationTimeout = 0;
+    self->triggerOps = 0;
     return self;
 }
 
@@ -70,6 +76,12 @@ ReportControl_destroy(ReportControl* self)
 
     if (self->bufferd == false)
         MmsValue_delete(self->timeOfEntry);
+
+    if (self->isDynamicDataSet) {
+    	if (self->dataSet != NULL)
+    		MmsMapping_freeDynamicallyCreatedDataSet(self->dataSet);
+    }
+
 
     free(self->name);
 
@@ -210,6 +222,7 @@ sendReport(ReportControl* self, bool isIntegrity, bool isGI)
         }
     }
 
+    /* add reason code to report if requested */
     if (MmsValue_getBitStringBit(optFlds, 3)) {
         for (i = 0; i < self->dataSet->elementCount; i++) {
 
@@ -246,14 +259,18 @@ sendReport(ReportControl* self, bool isIntegrity, bool isGI)
         }
     }
 
-    MmsServerConnection_sendInformationReport(self->clientConnection, NULL,
-            "RPT", reportElements);
+    /* clear inclusion flags */
+    for (i = 0; i < self->dataSet->elementCount; i++) {
+        self->inclusionFlags[i] = REPORT_CONTROL_NONE;
+    }
+
+    MmsServerConnection_sendInformationReportVMDSpecific(self->clientConnection, "RPT", reportElements, false);
 
     /* Increase sequence number */
     self->sqNum++;
     MmsValue_setUint16(sqNum, self->sqNum);
 
-    LinkedList_destroyDeep(deletableElements, MmsValue_delete);
+    LinkedList_destroyDeep(deletableElements, (LinkedListValueDeleteFunction) MmsValue_delete);
     LinkedList_destroyStatic(reportElements);
 
     /* clear GI flag */
@@ -264,16 +281,11 @@ sendReport(ReportControl* self, bool isIntegrity, bool isGI)
     }
 }
 
-
-
-
 void
 ReportControl_triggerGI(ReportControl* self)
 {
     self->gi = true;
 }
-
-
 
 void
 ReportControl_valueUpdated(ReportControl* self, int dataSetEntryIndex, ReportInclusionFlag flag)
@@ -293,7 +305,7 @@ ReportControl_valueUpdated(ReportControl* self, int dataSetEntryIndex, ReportInc
 }
 
 static char*
-createDataSetReference(ReportControlBlock* rcb, ReportControl* reportControl)
+createDataSetReferencForDefaultDataSet(ReportControlBlock* rcb, ReportControl* reportControl)
 {
     char* dataSetReference;
 
@@ -352,27 +364,27 @@ createTrgOps(ReportControlBlock* reportControlBlock) {
     return trgOps;
 }
 
-static MmsTypeSpecification*
+static MmsVariableSpecification*
 createUnbufferedReportControlBlock(ReportControlBlock* reportControlBlock,
         ReportControl* reportControl)
 {
-    MmsTypeSpecification* rcb = calloc(1, sizeof(MmsTypeSpecification));
+    MmsVariableSpecification* rcb = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     rcb->name = copyString(reportControlBlock->name);
     rcb->type = MMS_STRUCTURE;
 
-    MmsValue* mmsValue = calloc(1, sizeof(MmsValue));
+    MmsValue* mmsValue = (MmsValue*) calloc(1, sizeof(MmsValue));
     mmsValue->deleteValue = false;
     mmsValue->type = MMS_STRUCTURE;
     mmsValue->value.structure.size = 12;
-    mmsValue->value.structure.components = calloc(12, sizeof(MmsValue*));
+    mmsValue->value.structure.components = (MmsValue**) calloc(12, sizeof(MmsValue*));
 
     rcb->typeSpec.structure.elementCount = 12;
 
-    rcb->typeSpec.structure.elements = calloc(12,
-            sizeof(MmsTypeSpecification*));
+    rcb->typeSpec.structure.elements = (MmsVariableSpecification**) calloc(12,
+            sizeof(MmsVariableSpecification*));
 
-    MmsTypeSpecification* namedVariable = calloc(1,
-            sizeof(MmsTypeSpecification));
+    MmsVariableSpecification* namedVariable = 
+			(MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("RptID");
     namedVariable->typeSpec.visibleString = -129;
     namedVariable->type = MMS_VISIBLE_STRING;
@@ -380,31 +392,34 @@ createUnbufferedReportControlBlock(ReportControlBlock* reportControlBlock,
     mmsValue->value.structure.components[0] = MmsValue_newVisibleString(
             reportControlBlock->rptId);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("RptEna");
     namedVariable->type = MMS_BOOLEAN;
     rcb->typeSpec.structure.elements[1] = namedVariable;
     mmsValue->value.structure.components[1] = MmsValue_newBoolean(false);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("Resv");
     namedVariable->type = MMS_BOOLEAN;
     rcb->typeSpec.structure.elements[2] = namedVariable;
     mmsValue->value.structure.components[2] = MmsValue_newBoolean(false);
 
-    char* dataSetReference = createDataSetReference(reportControlBlock,
-            reportControl);
-
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("DatSet");
     namedVariable->typeSpec.visibleString = -129;
     namedVariable->type = MMS_VISIBLE_STRING;
     rcb->typeSpec.structure.elements[3] = namedVariable;
-    mmsValue->value.structure.components[3] = MmsValue_newVisibleString(
-            dataSetReference);
-    free(dataSetReference);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    if (reportControlBlock->dataSetName != NULL) {
+    	char* dataSetReference = createDataSetReferencForDefaultDataSet(reportControlBlock,
+    	            reportControl);
+    	mmsValue->value.structure.components[3] = MmsValue_newVisibleString(dataSetReference);
+    	free(dataSetReference);
+    }
+    else
+    	mmsValue->value.structure.components[3] = MmsValue_newVisibleString("");
+
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("ConfRev");
     namedVariable->type = MMS_UNSIGNED;
     namedVariable->typeSpec.unsignedInteger = 32;
@@ -414,14 +429,14 @@ createUnbufferedReportControlBlock(ReportControlBlock* reportControlBlock,
 
     reportControl->confRev = mmsValue->value.structure.components[4];
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("OptFlds");
     namedVariable->type = MMS_BIT_STRING;
     namedVariable->typeSpec.bitString = 10;
     rcb->typeSpec.structure.elements[5] = namedVariable;
     mmsValue->value.structure.components[5] = createOptFlds(reportControlBlock);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("BufTm");
     namedVariable->type = MMS_UNSIGNED;
     namedVariable->typeSpec.unsignedInteger = 32;
@@ -429,21 +444,21 @@ createUnbufferedReportControlBlock(ReportControlBlock* reportControlBlock,
     mmsValue->value.structure.components[6] =
             MmsValue_newUnsignedFromUint32(reportControlBlock->bufferTime);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("SqNum");
     namedVariable->type = MMS_UNSIGNED;
     namedVariable->typeSpec.unsignedInteger = 16;
     rcb->typeSpec.structure.elements[7] = namedVariable;
     mmsValue->value.structure.components[7] = MmsValue_newUnsigned(16);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("TrgOps");
     namedVariable->type = MMS_BIT_STRING;
     namedVariable->typeSpec.bitString = 6;
     rcb->typeSpec.structure.elements[8] = namedVariable;
     mmsValue->value.structure.components[8] = createTrgOps(reportControlBlock);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("IntgPd");
     namedVariable->type = MMS_UNSIGNED;
     namedVariable->typeSpec.unsignedInteger = 32;
@@ -451,13 +466,13 @@ createUnbufferedReportControlBlock(ReportControlBlock* reportControlBlock,
     mmsValue->value.structure.components[9] =
             MmsValue_newUnsignedFromUint32(reportControlBlock->intPeriod);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("GI");
     namedVariable->type = MMS_BOOLEAN;
     rcb->typeSpec.structure.elements[10] = namedVariable;
     mmsValue->value.structure.components[10] = MmsValue_newBoolean(false);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("Owner");
     namedVariable->type = MMS_OCTET_STRING;
     namedVariable->typeSpec.octetString = -128;
@@ -472,27 +487,27 @@ createUnbufferedReportControlBlock(ReportControlBlock* reportControlBlock,
 }
 
 
-static MmsTypeSpecification*
+static MmsVariableSpecification*
 createBufferedReportControlBlock(ReportControlBlock* reportControlBlock,
         ReportControl* reportControl)
 {
-    MmsTypeSpecification* rcb = calloc(1, sizeof(MmsTypeSpecification));
+    MmsVariableSpecification* rcb = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     rcb->name = copyString(reportControlBlock->name);
     rcb->type = MMS_STRUCTURE;
 
-    MmsValue* mmsValue = calloc(1, sizeof(MmsValue));
+    MmsValue* mmsValue = (MmsValue*) calloc(1, sizeof(MmsValue));
     mmsValue->deleteValue = false;
     mmsValue->type = MMS_STRUCTURE;
     mmsValue->value.structure.size = 15;
-    mmsValue->value.structure.components = calloc(15, sizeof(MmsValue*));
+    mmsValue->value.structure.components = (MmsValue**) calloc(15, sizeof(MmsValue*));
 
     rcb->typeSpec.structure.elementCount = 15;
 
-    rcb->typeSpec.structure.elements = calloc(15,
-            sizeof(MmsTypeSpecification*));
+    rcb->typeSpec.structure.elements = (MmsVariableSpecification**) calloc(15,
+            sizeof(MmsVariableSpecification*));
 
-    MmsTypeSpecification* namedVariable = calloc(1,
-            sizeof(MmsTypeSpecification));
+    MmsVariableSpecification* namedVariable = 
+			(MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("RptID");
     namedVariable->typeSpec.visibleString = -129;
     namedVariable->type = MMS_VISIBLE_STRING;
@@ -500,25 +515,28 @@ createBufferedReportControlBlock(ReportControlBlock* reportControlBlock,
     mmsValue->value.structure.components[0] = MmsValue_newVisibleString(
             reportControlBlock->rptId);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("RptEna");
     namedVariable->type = MMS_BOOLEAN;
     rcb->typeSpec.structure.elements[1] = namedVariable;
     mmsValue->value.structure.components[1] = MmsValue_newBoolean(false);
 
-    char* dataSetReference = createDataSetReference(reportControlBlock,
-            reportControl);
-
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("DatSet");
     namedVariable->typeSpec.visibleString = -129;
     namedVariable->type = MMS_VISIBLE_STRING;
     rcb->typeSpec.structure.elements[2] = namedVariable;
-    mmsValue->value.structure.components[2] = MmsValue_newVisibleString(
-            dataSetReference);
-    free(dataSetReference);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    if (reportControlBlock->dataSetName != NULL) {
+    	char* dataSetReference = createDataSetReferencForDefaultDataSet(reportControlBlock,
+    	            reportControl);
+    	mmsValue->value.structure.components[2] = MmsValue_newVisibleString(dataSetReference);
+    	free(dataSetReference);
+    }
+    else
+    	mmsValue->value.structure.components[2] = MmsValue_newVisibleString("");
+
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("ConfRev");
     namedVariable->type = MMS_UNSIGNED;
     namedVariable->typeSpec.unsignedInteger = 32;
@@ -528,14 +546,14 @@ createBufferedReportControlBlock(ReportControlBlock* reportControlBlock,
 
     reportControl->confRev = mmsValue->value.structure.components[3];
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("OptFlds");
     namedVariable->type = MMS_BIT_STRING;
     namedVariable->typeSpec.bitString = 10;
     rcb->typeSpec.structure.elements[4] = namedVariable;
     mmsValue->value.structure.components[4] = createOptFlds(reportControlBlock);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("BufTm");
     namedVariable->type = MMS_UNSIGNED;
     namedVariable->typeSpec.unsignedInteger = 32;
@@ -543,21 +561,21 @@ createBufferedReportControlBlock(ReportControlBlock* reportControlBlock,
     mmsValue->value.structure.components[5] =
             MmsValue_newUnsignedFromUint32(reportControlBlock->bufferTime);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("SqNum");
     namedVariable->type = MMS_UNSIGNED;
     namedVariable->typeSpec.unsignedInteger = 16;
     rcb->typeSpec.structure.elements[6] = namedVariable;
     mmsValue->value.structure.components[6] = MmsValue_newUnsigned(16);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("TrgOps");
     namedVariable->type = MMS_BIT_STRING;
     namedVariable->typeSpec.bitString = 6;
     rcb->typeSpec.structure.elements[7] = namedVariable;
     mmsValue->value.structure.components[7] = createTrgOps(reportControlBlock);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("IntgPd");
     namedVariable->type = MMS_UNSIGNED;
     namedVariable->typeSpec.unsignedInteger = 32;
@@ -565,26 +583,26 @@ createBufferedReportControlBlock(ReportControlBlock* reportControlBlock,
     mmsValue->value.structure.components[8] =
             MmsValue_newUnsignedFromUint32(reportControlBlock->intPeriod);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("GI");
     namedVariable->type = MMS_BOOLEAN;
     rcb->typeSpec.structure.elements[9] = namedVariable;
     mmsValue->value.structure.components[9] = MmsValue_newBoolean(false);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("PurgeBuf");
     namedVariable->type = MMS_BOOLEAN;
     rcb->typeSpec.structure.elements[10] = namedVariable;
     mmsValue->value.structure.components[10] = MmsValue_newBoolean(false);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("EntryID");
     namedVariable->type = MMS_OCTET_STRING;
     namedVariable->typeSpec.octetString = 8;
     rcb->typeSpec.structure.elements[11] = namedVariable;
     mmsValue->value.structure.components[11] = MmsValue_newOctetString(8, 8);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("TimeOfEntry");
     namedVariable->type = MMS_BINARY_TIME;
     rcb->typeSpec.structure.elements[12] = namedVariable;
@@ -592,14 +610,14 @@ createBufferedReportControlBlock(ReportControlBlock* reportControlBlock,
 
     reportControl->timeOfEntry = mmsValue->value.structure.components[12];
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("ResvTms");
     namedVariable->type = MMS_UNSIGNED;
     namedVariable->typeSpec.unsignedInteger = 32;
     rcb->typeSpec.structure.elements[13] = namedVariable;
     mmsValue->value.structure.components[13] = MmsValue_newUnsigned(32);
 
-    namedVariable = calloc(1, sizeof(MmsTypeSpecification));
+    namedVariable = (MmsVariableSpecification*) calloc(1, sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("Owner");
     namedVariable->type = MMS_OCTET_STRING;
     namedVariable->typeSpec.octetString = -128;
@@ -638,18 +656,18 @@ getRCBForLogicalNodeWithIndex(MmsMapping* self, LogicalNode* logicalNode,
     return NULL ;
 }
 
-MmsTypeSpecification*
+MmsVariableSpecification*
 Reporting_createMmsBufferedRCBs(MmsMapping* self, MmsDomain* domain,
         LogicalNode* logicalNode, int reportsCount)
 {
-    MmsTypeSpecification* namedVariable = calloc(1,
-            sizeof(MmsTypeSpecification));
+    MmsVariableSpecification* namedVariable = (MmsVariableSpecification*) calloc(1,
+            sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("BR");
     namedVariable->type = MMS_STRUCTURE;
 
     namedVariable->typeSpec.structure.elementCount = reportsCount;
-    namedVariable->typeSpec.structure.elements = calloc(reportsCount,
-            sizeof(MmsTypeSpecification*));
+    namedVariable->typeSpec.structure.elements = (MmsVariableSpecification**) calloc(reportsCount,
+            sizeof(MmsVariableSpecification*));
 
     int currentReport = 0;
 
@@ -675,18 +693,18 @@ Reporting_createMmsBufferedRCBs(MmsMapping* self, MmsDomain* domain,
     return namedVariable;
 }
 
-MmsTypeSpecification*
+MmsVariableSpecification*
 Reporting_createMmsUnbufferedRCBs(MmsMapping* self, MmsDomain* domain,
         LogicalNode* logicalNode, int reportsCount)
 {
-    MmsTypeSpecification* namedVariable = calloc(1,
-            sizeof(MmsTypeSpecification));
+    MmsVariableSpecification* namedVariable = (MmsVariableSpecification*) calloc(1,
+            sizeof(MmsVariableSpecification));
     namedVariable->name = copyString("RP");
     namedVariable->type = MMS_STRUCTURE;
 
     namedVariable->typeSpec.structure.elementCount = reportsCount;
-    namedVariable->typeSpec.structure.elements = calloc(reportsCount,
-            sizeof(MmsTypeSpecification*));
+    namedVariable->typeSpec.structure.elements = (MmsVariableSpecification**) calloc(reportsCount,
+            sizeof(MmsVariableSpecification*));
 
     int currentReport = 0;
 
@@ -712,86 +730,124 @@ Reporting_createMmsUnbufferedRCBs(MmsMapping* self, MmsDomain* domain,
     return namedVariable;
 }
 
-MmsValueIndication
+
+MmsDataAccessError
 Reporting_RCBWriteAccessHandler(MmsMapping* self, ReportControl* rc, char* elementName, MmsValue* value,
         MmsServerConnection* connection)
 {
     if (strcmp(elementName, "RptEna") == 0) {
 
-      if (value->value.boolean == true) {
+        if (value->value.boolean == true) {
 
-          if (rc->enabled == true)
-              return MMS_VALUE_ACCESS_DENIED;
+            if (rc->enabled == true)
+                return DATA_ACCESS_ERROR_TEMPORARILY_UNAVAILABLE;
 
-          if (DEBUG) printf("Activate report for client %s\n",
-                  MmsServerConnection_getClientAddress(connection));
+            if (DEBUG_IED_SERVER)
+                printf("Activate report for client %s\n",
+                        MmsServerConnection_getClientAddress(connection));
 
-          MmsValue* dataSetValue;
+            MmsValue* dataSetValue;
 
-          dataSetValue = ReportControl_getRCBValue(rc, "DatSet");
+            dataSetValue = ReportControl_getRCBValue(rc, "DatSet");
 
-          if (dataSetValue != NULL ) {
-              DataSet* dataSet = IedModel_lookupDataSet(
-                      self->model,
-                      dataSetValue->value.visibleString);
+            char* dataSetName = MmsValue_toString(dataSetValue);
 
-              rc->dataSet = dataSet;
+            if (rc->isDynamicDataSet) {
+                if (rc->dataSet != NULL)
+                    MmsMapping_freeDynamicallyCreatedDataSet(rc->dataSet);
+            }
 
-              rc->inclusionField = MmsValue_newBitString(
-                      dataSet->elementCount);
+            if (dataSetValue != NULL) {
+                DataSet* dataSet = IedModel_lookupDataSet(self->model, dataSetName);
 
-              rc->clientConnection = connection;
+                if (dataSet == NULL) {
+                    dataSet = MmsMapping_getDomainSpecificDataSet(self, dataSetName);
 
-              // TODO check integrity bit in trigger options
+                    if (dataSet == NULL)
+                        return DATA_ACCESS_ERROR_OBJECT_ATTRIBUTE_INCONSISTENT;
 
-              MmsValue* intgPd = ReportControl_getRCBValue(rc, "IntgPd");
+                    rc->isDynamicDataSet = true;
 
-              rc->intgPd = MmsValue_toUint32(intgPd);
+                }
+                else
+                    rc->isDynamicDataSet = false;
 
-              MmsValue* rptEna = ReportControl_getRCBValue(rc, "RptEna");
+                rc->dataSet = dataSet;
 
-              MmsValue_update(rptEna, value);
+                rc->inclusionField = MmsValue_newBitString(
+                        dataSet->elementCount);
 
-              MmsValue* bufTm = ReportControl_getRCBValue(rc, "BufTm");
+                rc->clientConnection = connection;
 
-              rc->bufTm = MmsValue_toUint32(bufTm);
+                // TODO check integrity bit in trigger options
 
-              rc->sqNum = 0;
+                MmsValue* intgPd = ReportControl_getRCBValue(rc, "IntgPd");
 
-              rc->inclusionFlags = calloc(dataSet->elementCount, sizeof(ReportInclusionFlag));
+                rc->intgPd = MmsValue_toUint32(intgPd);
 
-              rc->enabled = true;
+                MmsValue* rptEna = ReportControl_getRCBValue(rc, "RptEna");
 
-              return MMS_VALUE_OK;
-          }
+                MmsValue_update(rptEna, value);
 
-          return MMS_VALUE_ACCESS_DENIED;
-      } else {
-          if (((rc->enabled) || (rc->reserved)) && (rc->clientConnection != connection))
-              return MMS_VALUE_ACCESS_DENIED;
+                MmsValue* bufTm = ReportControl_getRCBValue(rc, "BufTm");
 
-          if (DEBUG) printf("Deactivate report for client %s\n",
-                          MmsServerConnection_getClientAddress(connection));
+                rc->bufTm = MmsValue_toUint32(bufTm);
 
-          free(rc->inclusionFlags);
-          rc->inclusionFlags = NULL;
+                rc->triggerOps = 0;
 
-          rc->enabled = false;
-      }
+                MmsValue* trgOps = ReportControl_getRCBValue(rc, "TrgOps");
+
+                if (MmsValue_getBitStringBit(trgOps, 1))
+                    rc->triggerOps += TRG_OPT_DATA_CHANGED;
+                if (MmsValue_getBitStringBit(trgOps, 2))
+                    rc->triggerOps += TRG_OPT_QUALITY_CHANGED;
+                if (MmsValue_getBitStringBit(trgOps, 3))
+                    rc->triggerOps += TRG_OPT_DATA_UPDATE;
+                if (MmsValue_getBitStringBit(trgOps, 4))
+                    rc->triggerOps += TRG_OPT_INTEGRITY;
+                if (MmsValue_getBitStringBit(trgOps, 5))
+                    rc->triggerOps += TRG_OPT_GI;
+
+                rc->sqNum = 0;
+
+                rc->inclusionFlags = (ReportInclusionFlag*) calloc(dataSet->elementCount, sizeof(ReportInclusionFlag));
+
+                rc->enabled = true;
+
+                return DATA_ACCESS_ERROR_SUCCESS;
+            }
+
+            return DATA_ACCESS_ERROR_OBJECT_ATTRIBUTE_INCONSISTENT;
+        }
+        else {
+            if (((rc->enabled) || (rc->reserved)) && (rc->clientConnection != connection))
+                return DATA_ACCESS_ERROR_TEMPORARILY_UNAVAILABLE;
+
+            if (DEBUG_IED_SERVER)
+                printf("Deactivate report for client %s\n",
+                        MmsServerConnection_getClientAddress(connection));
+
+            free(rc->inclusionFlags);
+            rc->inclusionFlags = NULL;
+
+            rc->enabled = false;
+        }
 
     }
 
     if (strcmp(elementName, "GI") == 0) {
-      if ((rc->enabled) && (rc->clientConnection == connection)) {
-          rc->gi = true;
-          return MMS_VALUE_OK;
-      }
+        if ((rc->enabled) && (rc->clientConnection == connection)) {
+            rc->gi = true;
+            return DATA_ACCESS_ERROR_SUCCESS;;
+        }
+        else
+            return DATA_ACCESS_ERROR_TEMPORARILY_UNAVAILABLE;
     }
 
     if (rc->enabled == false) {
 
         if ((rc->reserved) && (rc->clientConnection != connection))
-            return MMS_VALUE_ACCESS_DENIED;
+            return DATA_ACCESS_ERROR_TEMPORARILY_UNAVAILABLE;
 
         if (rc->bufferd == false) {
             if (strcmp(elementName, "Resv") == 0) {
@@ -804,15 +860,15 @@ Reporting_RCBWriteAccessHandler(MmsMapping* self, ReportControl* rc, char* eleme
 
         MmsValue* rcbValue = ReportControl_getRCBValue(rc, elementName);
 
-        if (rcbValue != NULL )
+        if (rcbValue != NULL)
             MmsValue_update(rcbValue, value);
         else
-            return MMS_VALUE_VALUE_INVALID;
+            return DATA_ACCESS_ERROR_OBJECT_VALUE_INVALID;
     }
     else
-        return MMS_VALUE_ACCESS_DENIED;
+        return DATA_ACCESS_ERROR_TEMPORARILY_UNAVAILABLE;
 
-    return MMS_VALUE_OK;
+    return DATA_ACCESS_ERROR_SUCCESS;;
 }
 
 void
@@ -824,18 +880,22 @@ Reporting_processReportEvents(MmsMapping* self, uint64_t currentTimeInMs)
         ReportControl* rc = (ReportControl*) element->data;
 
         if (rc->enabled) {
-            if (rc->gi) {
-                updateTimeOfEntry(rc, currentTimeInMs);
-                sendReport(rc, false, true);
-                rc->triggered = false;
+            if (rc->triggerOps & TRG_OPT_GI) {
+                if (rc->gi) {
+                    updateTimeOfEntry(rc, currentTimeInMs);
+                    sendReport(rc, false, true);
+                    rc->triggered = false;
+                }
             }
 
-            if (rc->intgPd > 0) {
-                if (currentTimeInMs >= rc->nextIntgReportTime) {
-                    rc->nextIntgReportTime = currentTimeInMs + rc->intgPd;
-                    updateTimeOfEntry(rc, currentTimeInMs);
-                    sendReport(rc, true, false);
-                    rc->triggered = false;
+            if (rc->triggerOps & TRG_OPT_INTEGRITY) {
+                if (rc->intgPd > 0) {
+                    if (currentTimeInMs >= rc->nextIntgReportTime) {
+                        rc->nextIntgReportTime = currentTimeInMs + rc->intgPd;
+                        updateTimeOfEntry(rc, currentTimeInMs);
+                        sendReport(rc, true, false);
+                        rc->triggered = false;
+                    }
                 }
             }
 

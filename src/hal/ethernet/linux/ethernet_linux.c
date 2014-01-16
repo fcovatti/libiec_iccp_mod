@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 #include "ethernet.h"
 
@@ -96,7 +97,7 @@ Ethernet_createSocket(char* interfaceId, uint8_t* destAddress)
     ethernetSocket->socketAddress.sll_family = PF_PACKET;
     ethernetSocket->socketAddress.sll_protocol = htons(ETH_P_IP);
 
-    ethernetSocket->socketAddress.sll_ifindex = getInterfaceIndex(ethernetSocket->rawSocket, "eth0");
+    ethernetSocket->socketAddress.sll_ifindex = getInterfaceIndex(ethernetSocket->rawSocket, interfaceId);
 
     ethernetSocket->socketAddress.sll_hatype =  ARPHRD_ETHER;
     ethernetSocket->socketAddress.sll_pkttype = PACKET_OTHERHOST;
@@ -125,7 +126,7 @@ int
 Ethernet_receivePacket(EthernetSocket self, uint8_t* buffer, int bufferSize)
 {
     if (self->isBind == false) {
-        bind(self->rawSocket, &self->socketAddress, sizeof(self->socketAddress));
+        bind(self->rawSocket, (struct sockaddr*) &self->socketAddress, sizeof(self->socketAddress));
         //TODO check return value
         self->isBind = true;
     }

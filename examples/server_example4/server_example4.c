@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
 	IedServer iedServer = IedServer_create(&iedModel);
 
 	/* Activate authentication */
-	AcseAuthenticationParameter auth = calloc(1, sizeof(struct sAcseAuthenticationParameter));
+	AcseAuthenticationParameter auth = (AcseAuthenticationParameter) calloc(1, sizeof(struct sAcseAuthenticationParameter));
 	auth->mechanism = AUTH_PASSWORD;
 	auth->value.password.string = "testpw";
 	IsoServer isoServer = IedServer_getIsoServer(iedServer);

@@ -44,6 +44,15 @@ MmsGooseControlBlock_getName(MmsGooseControlBlock self);
 MmsValue*
 MmsGooseControlBlock_getGCBValue(MmsGooseControlBlock self, char* elementName);
 
+MmsValue*
+MmsGooseControlBlock_getMmsValues(MmsGooseControlBlock self);
+
+MmsVariableSpecification*
+MmsGooseControlBlock_getVariableSpecification(MmsGooseControlBlock self);
+
+DataSet*
+MmsGooseControlBlock_getDataSet(MmsGooseControlBlock self);
+
 bool
 MmsGooseControlBlock_isEnabled(MmsGooseControlBlock self);
 
@@ -58,5 +67,9 @@ MmsGooseControlBlock_enable(MmsGooseControlBlock self);
 
 void
 MmsGooseControlBlock_disable(MmsGooseControlBlock self);
+
+MmsVariableSpecification*
+GOOSE_createGOOSEControlBlocks(MmsMapping* self, MmsDomain* domain,
+        LogicalNode* logicalNode, int gseCount);
 
 #endif /* MMS_GOOSE_H_ */

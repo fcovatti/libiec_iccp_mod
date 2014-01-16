@@ -32,13 +32,18 @@ typedef struct sMapEntry {
 static int
 comparePointerKeys(void* key1, void* key2)
 {
-	return key2 - key1;
+	if (key2 == key1)
+		return 0;
+	else
+		return -1;
+
+	//return (int) (key2 - key1);
 }
 
 Map
 Map_create()
 {
-	Map map = calloc(1, sizeof(struct sMap));
+	Map map = (Map) calloc(1, sizeof(struct sMap));
 	map->entries = LinkedList_create();
 	map->compareKeys = comparePointerKeys;
 	return map;
@@ -53,7 +58,7 @@ Map_size(Map map)
 void*
 Map_addEntry(Map map, void* key, void* value)
 {
-	MapEntry* entry = malloc(sizeof(MapEntry));
+	MapEntry* entry = (MapEntry*) malloc(sizeof(MapEntry));
 	entry->key = key;
 	entry->value = value;
 	LinkedList_add(map->entries, entry);

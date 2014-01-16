@@ -126,9 +126,7 @@ typedef enum ServiceError__errorClass__file {
 	ServiceError__errorClass__file_insufficientspaceinfilestore	= 9
 } e_ServiceError__errorClass__file;
 
-/* ServiceError */
-typedef struct ServiceError {
-	struct ServiceError__errorClass {
+struct ServiceError__errorClass {
 		ServiceError__errorClass_PR present;
 		union ServiceError__errorClass_u {
 			INTEGER_t	 vmdstate;
@@ -148,7 +146,11 @@ typedef struct ServiceError {
 		
 		/* Context for parsing across buffer boundaries */
 		asn_struct_ctx_t _asn_ctx;
-	} errorClass;
+	};
+
+/* ServiceError */
+typedef struct ServiceError {
+	struct ServiceError__errorClass errorClass;
 	INTEGER_t	*additionalCode	/* OPTIONAL */;
 	VisibleString_t	*additionalDescription	/* OPTIONAL */;
 	

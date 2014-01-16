@@ -47,12 +47,13 @@ typedef struct sMmsServerConnection {
 	IsoConnection isoConnection;
 	MmsServer server;
 	LinkedList /*<MmsNamedVariableList>*/namedVariableLists; /* aa-specific named variable lists */
+	uint32_t lastInvokeId;
 } MmsServerConnection;
 
 typedef MmsValue* (*ReadVariableHandler)(void* parameter, MmsDomain* domain,
-		char* variableId);
+		char* variableId, MmsServerConnection* connection);
 
-typedef MmsValueIndication (*WriteVariableHandler)(void* parameter,
+typedef MmsDataAccessError (*WriteVariableHandler)(void* parameter,
 		MmsDomain* domain, char* variableId, MmsValue* value,
 		MmsServerConnection* connection);
 
@@ -109,6 +110,18 @@ MmsServer_stopListening(MmsServer self);
 
 void
 MmsServer_destroy(MmsServer self);
+
+void
+MmsServer_setServerIdentity(MmsServer self, char* vendorName, char* modelName, char* revision);
+
+char*
+MmsServer_getVendorName(MmsServer self);
+
+char*
+MmsServer_getModelName(MmsServer self);
+
+char*
+MmsServer_getRevision(MmsServer self);
 
 /**@}*/
 

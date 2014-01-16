@@ -31,16 +31,18 @@ typedef enum VariableAccessSpecification_PR {
 /* Forward declarations */
 struct ListOfVariableSeq;
 
-/* VariableAccessSpecification */
-typedef struct VariableAccessSpecification {
-	VariableAccessSpecification_PR present;
-	union VariableAccessSpecification_u {
-		struct VariableAccessSpecification__listOfVariable {
+struct VariableAccessSpecification__listOfVariable {
 			A_SEQUENCE_OF(struct ListOfVariableSeq) list;
 			
 			/* Context for parsing across buffer boundaries */
 			asn_struct_ctx_t _asn_ctx;
-		} listOfVariable;
+		};
+
+/* VariableAccessSpecification */
+typedef struct VariableAccessSpecification {
+	VariableAccessSpecification_PR present;
+	union VariableAccessSpecification_u {
+		 struct VariableAccessSpecification__listOfVariable listOfVariable;
 		ObjectName_t	 variableListName;
 	} choice;
 	

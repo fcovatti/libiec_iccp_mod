@@ -25,21 +25,25 @@ extern "C" {
 /* Forward declarations */
 struct AlternateAccess;
 
-/* GetNamedVariableListAttributesResponse */
-typedef struct GetNamedVariableListAttributesResponse {
-	BOOLEAN_t	 mmsDeletable;
-	struct GetNamedVariableListAttributesResponse__listOfVariable {
-		A_SEQUENCE_OF(struct GetNamedVariableListAttributesResponse__listOfVariable__Member {
+struct GetNamedVariableListAttributesResponse__listOfVariable__Member {
 			VariableSpecification_t	 variableSpecification;
 			struct AlternateAccess	*alternateAccess	/* OPTIONAL */;
 			
 			/* Context for parsing across buffer boundaries */
 			asn_struct_ctx_t _asn_ctx;
-		} ) list;
+		} ;
+
+struct GetNamedVariableListAttributesResponse__listOfVariable {
+		A_SEQUENCE_OF(struct GetNamedVariableListAttributesResponse__listOfVariable__Member) list;
 		
 		/* Context for parsing across buffer boundaries */
 		asn_struct_ctx_t _asn_ctx;
-	} listOfVariable;
+	};
+
+/* GetNamedVariableListAttributesResponse */
+typedef struct GetNamedVariableListAttributesResponse {
+	BOOLEAN_t	 mmsDeletable;
+	struct GetNamedVariableListAttributesResponse__listOfVariable listOfVariable;
 	
 	/* Context for parsing across buffer boundaries */
 	asn_struct_ctx_t _asn_ctx;

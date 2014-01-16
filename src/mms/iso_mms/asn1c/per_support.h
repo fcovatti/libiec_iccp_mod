@@ -11,16 +11,18 @@
 extern "C" {
 #endif
 
-/*
- * Pre-computed PER constraints.
- */
-typedef struct asn_per_constraint_s {
-	enum asn_per_constraint_flags {
+enum asn_per_constraint_flags {
 		APC_UNCONSTRAINED	= 0x0,	/* No PER visible constraints */
 		APC_SEMI_CONSTRAINED	= 0x1,	/* Constrained at "lb" */
 		APC_CONSTRAINED		= 0x2,	/* Fully constrained */
 		APC_EXTENSIBLE		= 0x4	/* May have extension */
-	} flags;
+	};
+
+/*
+ * Pre-computed PER constraints.
+ */
+typedef struct asn_per_constraint_s {
+	enum asn_per_constraint_flags flags;
 	int  range_bits;		/* Full number of bits in the range */
 	int  effective_bits;		/* Effective bits */
 	long lower_bound;		/* "lb" value */

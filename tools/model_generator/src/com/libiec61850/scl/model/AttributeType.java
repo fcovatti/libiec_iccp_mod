@@ -31,6 +31,7 @@ public enum AttributeType {
 	INT16,  /* int16_t */
 	INT32,  /* int32_t */
 	INT64,  /* int64_t */
+	INT128,
 	INT8U,  /* uint8_t */
 	INT16U, /* uint16_t */
 	INT24U, /* uint32_t */
@@ -67,6 +68,8 @@ public enum AttributeType {
 			return INT32;
 		else if(typeString.equals("INT64"))
 			return INT64;
+		else if(typeString.equals("INT128"))
+			return INT128;
 		else if(typeString.equals("INT8U"))
 			return INT8U;
 		else if(typeString.equals("INT16U"))
@@ -81,12 +84,12 @@ public enum AttributeType {
 			return FLOAT64;
 		else if(typeString.equals("Enum"))
 			return ENUMERATED;
-		else if(typeString.equals("Dbpos")) //TODO check if this is always correct
-		    return ENUMERATED;
-		else if(typeString.equals("Check")) //TODO check if this is always correct
+		else if(typeString.equals("Dbpos"))
+		    return CODEDENUM;
+		else if(typeString.equals("Check"))
             return CHECK;
 		else if(typeString.equals("Tcmd"))
-			return ENUMERATED;
+			return CODEDENUM;
 		else if(typeString.equals("Octet64"))
 		    return OCTET_STRING_64;
 		else if(typeString.equals("Quality"))

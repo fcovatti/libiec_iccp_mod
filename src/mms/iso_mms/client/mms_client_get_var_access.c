@@ -30,30 +30,10 @@
 
 #include "mms_client_internal.h"
 
-
-/*
- 	TypeSpecification_PR_NOTHING,
-	TypeSpecification_PR_typeName,
-	TypeSpecification_PR_array,
-	TypeSpecification_PR_structure,
-	TypeSpecification_PR_boolean,
-	TypeSpecification_PR_bitstring,
-	TypeSpecification_PR_integer,
-	TypeSpecification_PR_unsigned,
-	TypeSpecification_PR_floatingpoint,
-	TypeSpecification_PR_octetstring,
-	TypeSpecification_PR_visiblestring,
-	TypeSpecification_PR_generalizedtime,
-	TypeSpecification_PR_binarytime,
-	TypeSpecification_PR_bcd,
-	TypeSpecification_PR_objId,
-	TypeSpecification_PR_mMSString,
-	TypeSpecification_PR_utctime
- */
-
-static MmsTypeSpecification*
+static MmsVariableSpecification*
 createTypeSpecification(TypeSpecification_t* asnTypeSpec) {
-	MmsTypeSpecification* typeSpec = calloc(1, sizeof(MmsTypeSpecification));
+	MmsVariableSpecification* typeSpec = (MmsVariableSpecification*) 
+						calloc(1, sizeof(MmsVariableSpecification));
 
 	switch (asnTypeSpec->present) {
 	case TypeSpecification_PR_structure:
@@ -63,8 +43,8 @@ createTypeSpecification(TypeSpecification_t* asnTypeSpec) {
 			int elementCount = asnTypeSpec->choice.structure.components.list.count;
 			typeSpec->typeSpec.structure.elementCount = elementCount;
 
-			typeSpec->typeSpec.structure.elements =
-					calloc(elementCount, sizeof(MmsTypeSpecification*));
+			typeSpec->typeSpec.structure.elements = (MmsVariableSpecification**)
+					calloc(elementCount, sizeof(MmsVariableSpecification*));
 
 			int i;
 
@@ -140,11 +120,11 @@ createTypeSpecification(TypeSpecification_t* asnTypeSpec) {
 	return typeSpec;
 }
 
-MmsTypeSpecification*
+MmsVariableSpecification*
 mmsClient_parseGetVariableAccessAttributesResponse(ByteBuffer* message, uint32_t* invokeId)
 {
 	MmsPdu_t* mmsPdu = 0; /* allow asn1c to allocate structure */
-	MmsTypeSpecification* typeSpec = NULL;
+	MmsVariableSpecification* typeSpec = NULL;
 
 	asn_dec_rval_t rval;
 
@@ -155,7 +135,8 @@ mmsClient_parseGetVariableAccessAttributesResponse(ByteBuffer* message, uint32_t
 
 	if (mmsPdu->present == MmsPdu_PR_confirmedResponsePdu) {
 
-		*invokeId = mmsClient_getInvokeId(&mmsPdu->choice.confirmedResponsePdu);
+	    if (invokeId != NULL)
+	        *invokeId = mmsClient_getInvokeId(&mmsPdu->choice.confirmedResponsePdu);
 
 		if (mmsPdu->choice.confirmedResponsePdu.confirmedServiceResponse.present ==
 				ConfirmedServiceResponse_PR_getVariableAccessAttributes)
@@ -176,10 +157,11 @@ mmsClient_parseGetVariableAccessAttributesResponse(ByteBuffer* message, uint32_t
 
 int
 mmsClient_createGetVariableAccessAttributesRequest(
+        uint32_t invokeId,
 		char* domainId, char* itemId,
 		ByteBuffer* writeBuffer)
 {
-	MmsPdu_t* mmsPdu = mmsClient_createConfirmedRequestPdu(1);
+	MmsPdu_t* mmsPdu = mmsClient_createConfirmedRequestPdu(invokeId);
 
 	mmsPdu->choice.confirmedRequestPdu.confirmedServiceRequest.present =
 			ConfirmedServiceRequest_PR_getVariableAccessAttributes;
@@ -193,15 +175,15 @@ mmsClient_createGetVariableAccessAttributesRequest(
 
 	request->choice.name.present = ObjectName_PR_domainspecific;
 
-	request->choice.name.choice.domainspecific.domainId.buf = domainId;
+	request->choice.name.choice.domainspecific.domainId.buf = (uint8_t*) domainId;
 	request->choice.name.choice.domainspecific.domainId.size = strlen(domainId);
-	request->choice.name.choice.domainspecific.itemId.buf = itemId;
+	request->choice.name.choice.domainspecific.itemId.buf = (uint8_t*) itemId;
 	request->choice.name.choice.domainspecific.itemId.size = strlen(itemId);
 
 	asn_enc_rval_t rval;
 
 	rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
-	            mmsClient_write_out, (void*) writeBuffer);
+		(asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
 
 	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
 

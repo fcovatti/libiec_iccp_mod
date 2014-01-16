@@ -24,24 +24,56 @@
 #ifndef IEC61850_COMMON_H_
 #define IEC61850_COMMON_H_
 
+/**
+ * \defgroup common_api_group libIEC61850 API common parts
+ */
+/**@{*/
+
+/* Trigger options bit mask */
+#define TRG_OPT_DATA_CHANGED 1
+#define TRG_OPT_QUALITY_CHANGED 2
+#define TRG_OPT_DATA_UPDATE 4
+#define TRG_OPT_INTEGRITY 8
+#define TRG_OPT_GI 16
+
+ /* FCs according to IEC 61850-7-2 */
 typedef enum eFunctionalConstraint {
-    // FCs according to IEC 61850-7-2:
-    ST, /** Status information */
-    MX, /** Measurands - analog values */
-    SP, /** Setpoint */
-    SV, /** Substitution */
-    CF, /** Configuration */
-    DC, /** Description */
-    SG, /** Setting group */
-    SE, /** Setting group editable */
-    SR, /** Service response / Service tracking */
-    OR, /** Operate received */
-    BL, /** Blocking */
-    EX, /** Extended definition */
-    CO  /** Control */
+    /** Status information */
+    ST = 0,
+    /** Measurands - analog values */
+    MX = 1,
+    /** Setpoint */
+    SP = 2,
+    /** Substitution */
+    SV = 3,
+    /** Configuration */
+    CF = 4,
+    /** Description */
+    DC = 5,
+    /** Setting group */
+    SG = 6,
+    /** Setting group editable */
+    SE = 7,
+    /** Service response / Service tracking */
+    SR = 8,
+    /** Operate received */
+    OR = 9,
+    /** Blocking */
+    BL = 10,
+    /** Extended definition */
+    EX = 11,
+    /** Control */
+    CO = 12,
+    ALL = 99,
+    NONE = -1
 } FunctionalConstraint;
 
 char*
-FunctionalConstrained_toString(FunctionalConstraint fc);
+FunctionalConstraint_toString(FunctionalConstraint fc);
+
+FunctionalConstraint
+FunctionalConstraint_fromString(char* fcString);
+
+/**@}*/
 
 #endif /* IEC61850_COMMON_H_ */

@@ -32,9 +32,7 @@ typedef enum AlternateAccess__Member_PR {
 /* Forward declarations */
 struct AlternateAccessSelection;
 
-/* AlternateAccess */
-typedef struct AlternateAccess {
-	A_SEQUENCE_OF(struct AlternateAccess__Member {
+struct AlternateAccess__Member {
 		AlternateAccess__Member_PR present;
 		union AlternateAccess__Member_u {
 			struct AlternateAccessSelection	*unnamed;
@@ -49,7 +47,11 @@ typedef struct AlternateAccess {
 		
 		/* Context for parsing across buffer boundaries */
 		asn_struct_ctx_t _asn_ctx;
-	} ) list;
+	};
+
+/* AlternateAccess */
+typedef struct AlternateAccess {
+	A_SEQUENCE_OF(struct AlternateAccess__Member) list;
 	
 	/* Context for parsing across buffer boundaries */
 	asn_struct_ctx_t _asn_ctx;

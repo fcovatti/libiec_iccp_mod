@@ -19,6 +19,10 @@
 #include <stdarg.h>	/* For va_start */
 #include <stddef.h>	/* for offsetof and ptrdiff_t */
 
+#ifdef _WIN32
+#define WIN32
+#endif
+
 #ifdef	WIN32
 
 #include <malloc.h>
@@ -31,12 +35,12 @@
 #define inline __inline
 #endif
 #define	ssize_t		SSIZE_T
-typedef	char		int8_t;
-typedef	short		int16_t;
-typedef	int		int32_t;
-typedef	unsigned char	uint8_t;
-typedef	unsigned short	uint16_t;
-typedef	unsigned int	uint32_t;
+//typedef	char		int8_t;
+//typedef	short		int16_t;
+//typedef	int		int32_t;
+//typedef	unsigned char	uint8_t;
+//typedef	unsigned short	uint16_t;
+//typedef	unsigned int	uint32_t;
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <float.h>

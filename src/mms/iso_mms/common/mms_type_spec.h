@@ -30,14 +30,44 @@
 
 #include "mms_common.h"
 #include "mms_types.h"
+#include "linked_list.h"
 
 /**
- * Delete MmsTypeSpecification object (recursive).
+ * \brief Delete MmsTypeSpecification object (recursive).
+ *
+ * \param self the MmsVariableSpecification object
  */
 void
-MmsTypeSpecification_delete(MmsTypeSpecification* typeSpec);
+MmsVariableSpecification_destroy(MmsVariableSpecification* self);
 
 MmsValue*
-MmsTypeSpecification_getChildValue(MmsTypeSpecification* typeSpec, MmsValue* value, char* childId);
+MmsVariableSpecification_getChildValue(MmsVariableSpecification* self, MmsValue* value, char* childId);
+
+MmsType
+MmsVariableSpecification_getType(MmsVariableSpecification* self);
+
+char*
+MmsVariableSpecification_getName(MmsVariableSpecification* self);
+
+LinkedList /* <char*> */
+MmsVariableSpecification_getStructureElements(MmsVariableSpecification* self);
+
+/**
+ * \brief returns the number of elements if the type is a complex type (structure, array)
+ *
+ * \param self the MmsVariableSpecification object
+ * \return the number of elements or -1 if not applicable
+ */
+int
+MmsVariableSpecification_getSize(MmsVariableSpecification* self);
+
+MmsVariableSpecification*
+MmsVariableSpecification_getChildSpecificationByIndex(MmsVariableSpecification* self, int index);
+
+MmsVariableSpecification*
+MmsVariableSpecification_getArrayElementSpecification(MmsVariableSpecification* self);
+
+int
+MmsVariableSpecification_getExponentWidth(MmsVariableSpecification* self);
 
 #endif /* MMS_TYPE_SPEC_H_ */

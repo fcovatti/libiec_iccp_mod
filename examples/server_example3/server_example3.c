@@ -28,6 +28,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "static_model.h"
 
@@ -43,7 +44,7 @@ void sigint_handler(int signalId)
 }
 
 void
-controlListener(void* parameter, MmsValue* value)
+controlHandler(void* parameter, MmsValue* value, bool test)
 {
     printf("received control command %i %i: ", value->type, value->value.boolean);
 
@@ -52,17 +53,29 @@ controlListener(void* parameter, MmsValue* value)
     else
         printf("off\n");
 
-    if (parameter == IEDMODEL_GenericIO_GGIO1_SPCSO1)
+    MmsValue* timeStamp = MmsValue_newUtcTimeByMsTime(Hal_getTimeInMs());
+
+    if (parameter == IEDMODEL_GenericIO_GGIO1_SPCSO1) {
         IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO1_stVal, value);
+        IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO1_t, timeStamp);
+    }
 
-    if (parameter == IEDMODEL_GenericIO_GGIO1_SPCSO2)
+    if (parameter == IEDMODEL_GenericIO_GGIO1_SPCSO2) {
         IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO2_stVal, value);
+        IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO2_t, timeStamp);
+    }
 
-    if (parameter == IEDMODEL_GenericIO_GGIO1_SPCSO3)
+    if (parameter == IEDMODEL_GenericIO_GGIO1_SPCSO3) {
         IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO3_stVal, value);
+        IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO3_t, timeStamp);
+    }
 
-    if (parameter == IEDMODEL_GenericIO_GGIO1_SPCSO4)
+    if (parameter == IEDMODEL_GenericIO_GGIO1_SPCSO4) {
         IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO4_stVal, value);
+        IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO4_t, timeStamp);
+    }
+
+    MmsValue_delete(timeStamp);
 }
 
 int main(int argc, char** argv) {
@@ -72,16 +85,16 @@ int main(int argc, char** argv) {
 	/* MMS server will be instructed to start listening to client connections. */
 	IedServer_start(iedServer, 102);
 
-	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO1, (ControlHandler) controlListener,
+	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO1, (ControlHandler) controlHandler,
 	        IEDMODEL_GenericIO_GGIO1_SPCSO1);
 
-	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO2, (ControlHandler) controlListener,
+	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO2, (ControlHandler) controlHandler,
 	            IEDMODEL_GenericIO_GGIO1_SPCSO2);
 
-	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO3, (ControlHandler) controlListener,
+	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO3, (ControlHandler) controlHandler,
 	            IEDMODEL_GenericIO_GGIO1_SPCSO3);
 
-	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO4, (ControlHandler) controlListener,
+	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO4, (ControlHandler) controlHandler,
 	            IEDMODEL_GenericIO_GGIO1_SPCSO4);
 
 	if (!IedServer_isRunning(iedServer)) {
@@ -94,8 +107,39 @@ int main(int argc, char** argv) {
 
 	signal(SIGINT, sigint_handler);
 
+	MmsValue* timestamp = MmsValue_newUtcTime(0);
+
+	float t = 0.f;
+
+	MmsValue* an1 = MmsValue_newFloat(0.f);
+	MmsValue* an2 = MmsValue_newFloat(0.f);
+	MmsValue* an3 = MmsValue_newFloat(0.f);
+	MmsValue* an4 = MmsValue_newFloat(0.f);
+
 	while (running) {
-		Thread_sleep(1);
+	    MmsValue_setUtcTimeMs(timestamp, Hal_getTimeInMs());
+
+	    t += 0.1f;
+
+	    MmsValue_setFloat(an1, sinf(t));
+	    MmsValue_setFloat(an2, sinf(t + 1.f));
+	    MmsValue_setFloat(an3, sinf(t + 2.f));
+	    MmsValue_setFloat(an4, sinf(t + 3.f));
+
+	    IedServer_lockDataModel(iedServer);
+
+	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn1_mag_f, an1);
+	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn1_t, timestamp);
+	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn2_mag_f, an2);
+	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn2_t, timestamp);
+	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn3_mag_f, an3);
+	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn3_t, timestamp);
+	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn4_mag_f, an4);
+	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn4_t, timestamp);
+
+	    IedServer_unlockDataModel(iedServer);
+
+		Thread_sleep(100);
 	}
 
 	/* stop MMS server - close TCP server socket and all client sockets */

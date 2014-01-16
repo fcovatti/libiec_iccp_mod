@@ -29,9 +29,8 @@
 #include "libiec61850_platform_includes.h"
 #include "mms_server_internal.h"
 #include "iso_server.h"
-
-#define REJECT_UNRECOGNIZED_SERVICE 1
-#define REJECT_UNKNOWN_PDU_TYPE 2
+#include "ber_encoder.h"
+#include "ber_decode.h"
 
 #define MMS_SERVICE_STATUS 0x80
 #define MMS_SERVICE_GET_NAME_LIST 0x40
@@ -57,11 +56,15 @@ static uint8_t servicesSupported[] =
 {
 		0x00
 		| MMS_SERVICE_GET_NAME_LIST
+		| MMS_SERVICE_IDENTIFY
 		| MMS_SERVICE_READ
 		| MMS_SERVICE_WRITE
 		| MMS_SERVICE_GET_VARIABLE_ACCESS_ATTRIBUTES
 		,
-		0x00,
+		0x00
+		| MMS_SERVICE_DEFINE_NAMED_VARIABLE_LIST
+		| MMS_SERVICE_DELETE_NAMED_VARIABLE_LIST
+		,
 		0x00,
 		0x00,
 		0x00,
@@ -86,26 +89,31 @@ static uint8_t parameterCBB[] =
  * MMS Common support functions
  *********************************************************************************************/
 
-static void
-writeMmsRejectPdu(int* invokeId, int reason, ByteBuffer* response) {
-	MmsPdu_t* mmsPdu = calloc(1, sizeof(MmsPdu_t));
+void
+mmsServer_writeMmsRejectPdu(uint32_t* invokeId, int reason, ByteBuffer* response) {
+	MmsPdu_t* mmsPdu = (MmsPdu_t*) calloc(1, sizeof(MmsPdu_t));
 
 	mmsPdu->present = MmsPdu_PR_rejectPDU;
 
 	if (invokeId != NULL) {
-		mmsPdu->choice.rejectPDU.originalInvokeID = calloc(1, sizeof(Unsigned32_t));
+		mmsPdu->choice.rejectPDU.originalInvokeID = (Unsigned32_t*) calloc(1, sizeof(Unsigned32_t));
 		asn_long2INTEGER(mmsPdu->choice.rejectPDU.originalInvokeID, *invokeId);
 	}
 
-	if (reason == REJECT_UNRECOGNIZED_SERVICE) {
+	if (reason == MMS_ERROR_REJECT_UNRECOGNIZED_SERVICE) {
 		mmsPdu->choice.rejectPDU.rejectReason.present = RejectPDU__rejectReason_PR_confirmedRequestPDU;
 		mmsPdu->choice.rejectPDU.rejectReason.choice.confirmedResponsePDU =
 			RejectPDU__rejectReason__confirmedRequestPDU_unrecognizedService;
 	}
-	else if(reason == REJECT_UNKNOWN_PDU_TYPE) {
+	else if(reason == MMS_ERROR_REJECT_UNKNOWN_PDU_TYPE) {
 		mmsPdu->choice.rejectPDU.rejectReason.present = RejectPDU__rejectReason_PR_pduError;
 		asn_long2INTEGER(&mmsPdu->choice.rejectPDU.rejectReason.choice.pduError,
 				RejectPDU__rejectReason__pduError_unknownPduType);
+	}
+	else if (reason == MMS_ERROR_REJECT_REQUEST_INVALID_ARGUMENT) {
+	    mmsPdu->choice.rejectPDU.rejectReason.present = RejectPDU__rejectReason_PR_confirmedRequestPDU;
+	    mmsPdu->choice.rejectPDU.rejectReason.choice.confirmedResponsePDU =
+	                RejectPDU__rejectReason__confirmedRequestPDU_invalidArgument;
 	}
 	else {
 		mmsPdu->choice.rejectPDU.rejectReason.present = RejectPDU__rejectReason_PR_confirmedRequestPDU;
@@ -113,10 +121,7 @@ writeMmsRejectPdu(int* invokeId, int reason, ByteBuffer* response) {
 			RejectPDU__rejectReason__confirmedRequestPDU_other;
 	}
 
-	asn_enc_rval_t rval;
-
-	rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
-			mmsServer_write_out, (void*) response);
+	der_encode(&asn_DEF_MmsPdu, mmsPdu,	mmsServer_write_out, (void*) response);
 
 	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
 
@@ -129,8 +134,7 @@ writeMmsRejectPdu(int* invokeId, int reason, ByteBuffer* response) {
 
 
 static int
-encodeInitResponseDetail(uint8_t parameterCBB[], uint8_t servicesSupported[], uint8_t* buffer, int bufPos,
-		bool encode)
+encodeInitResponseDetail(uint8_t* buffer, int bufPos, bool encode)
 {
 	int initResponseDetailSize = 14 + 5 + 3;
 
@@ -162,7 +166,7 @@ createInitiateResponse(MmsServerConnection* self, ByteBuffer* writeBuffer)
 	initiateResponseLength += 2 + BerEncoder_UInt32determineEncodedSize(self->maxServOutstandingCalled);
 	initiateResponseLength += 2 + BerEncoder_UInt32determineEncodedSize(self->dataStructureNestingLevel);
 
-	initiateResponseLength += encodeInitResponseDetail(parameterCBB, servicesSupported, NULL, 0, false);
+	initiateResponseLength += encodeInitResponseDetail(NULL, 0, false);
 
 	/* Initiate response pdu */
 	bufPos = BerEncoder_encodeTL(0xa9, initiateResponseLength, buffer, bufPos);
@@ -175,7 +179,7 @@ createInitiateResponse(MmsServerConnection* self, ByteBuffer* writeBuffer)
 
 	bufPos = BerEncoder_encodeUInt32WithTL(0x83, self->dataStructureNestingLevel, buffer, bufPos);
 
-	bufPos = encodeInitResponseDetail(parameterCBB, servicesSupported, buffer, bufPos, true);
+	bufPos = encodeInitResponseDetail(buffer, bufPos, true);
 
 	writeBuffer->size = bufPos;
 
@@ -196,7 +200,7 @@ parseInitiateRequestPdu(MmsServerConnection* self, uint8_t* buffer, int bufPos, 
 
 	while (bufPos < maxBufPos) {
 		uint8_t tag = buffer[bufPos++];
-		uint32_t length;
+		int length;
 
 		bufPos = BerDecoder_decodeLength(buffer, &length, bufPos, maxBufPos);
 
@@ -236,7 +240,7 @@ parseInitiateRequestPdu(MmsServerConnection* self, uint8_t* buffer, int bufPos, 
 	return true;
 }
 
-static
+static void
 handleInitiateRequestPdu (
 		MmsServerConnection* self,
 		uint8_t* buffer, int bufPos, int maxBufPos,
@@ -251,6 +255,48 @@ handleInitiateRequestPdu (
 
 }
 
+/**********************************************************************************************
+ * MMS Identify Service
+ *********************************************************************************************/
+
+static void
+handleIdentifyRequest(
+        MmsServerConnection* connection,
+        int invokeId,
+        ByteBuffer* response)
+{
+    int bufPos = 0;
+    uint8_t* buffer = response->buffer;
+
+    uint32_t invokeIdLength = BerEncoder_UInt32determineEncodedSize(invokeId);
+
+    MmsServer mmsServer = connection->server;
+
+    uint32_t vendorNameLength = strlen(MmsServer_getVendorName(mmsServer));
+    uint32_t modelNameLength = strlen(MmsServer_getModelName(mmsServer));
+    uint32_t revisionLength = strlen(MmsServer_getRevision(mmsServer));
+
+    uint32_t identityLength = 3 +  BerEncoder_determineLengthSize(vendorNameLength)
+            + BerEncoder_determineLengthSize(modelNameLength) + BerEncoder_determineLengthSize(revisionLength)
+            + vendorNameLength + modelNameLength + revisionLength;
+
+    uint32_t identifyResponseLength = invokeIdLength + 2 + 1 + BerEncoder_determineLengthSize(identityLength)
+            + identityLength;
+
+    /* Identify response pdu */
+    bufPos = BerEncoder_encodeTL(0xa1, identifyResponseLength, buffer, bufPos);
+
+    /* invokeId */
+    bufPos = BerEncoder_encodeTL(0x02, invokeIdLength, buffer, bufPos);
+    bufPos = BerEncoder_encodeUInt32(invokeId, buffer, bufPos);
+
+    bufPos = BerEncoder_encodeTL(0xa2, identityLength, buffer, bufPos);
+    bufPos = BerEncoder_encodeStringWithTag(0x80, MmsServer_getVendorName(mmsServer), buffer, bufPos);
+    bufPos = BerEncoder_encodeStringWithTag(0x81, MmsServer_getModelName(mmsServer), buffer, bufPos);
+    bufPos = BerEncoder_encodeStringWithTag(0x82, MmsServer_getRevision(mmsServer), buffer, bufPos);
+
+    response->size = bufPos;
+}
 
 /**********************************************************************************************
  * MMS General service handling functions
@@ -264,16 +310,14 @@ handleConfirmedRequestPdu(
 {
 	uint32_t invokeId = 0;
 
-	if (DEBUG) printf("invokeId: %i\n", invokeId);
-
 	while (bufPos < maxBufPos) {
 		uint8_t tag = buffer[bufPos++];
-		uint32_t length;
+		int length;
 
 		bufPos = BerDecoder_decodeLength(buffer, &length, bufPos, maxBufPos);
 
 		if (bufPos < 0)  {
-			writeMmsRejectPdu(&invokeId, REJECT_UNRECOGNIZED_SERVICE, response);
+			mmsServer_writeMmsRejectPdu(&invokeId, MMS_ERROR_REJECT_UNRECOGNIZED_SERVICE, response);
 			return;
 		}
 
@@ -282,11 +326,18 @@ handleConfirmedRequestPdu(
 		switch(tag) {
 		case 0x02: /* invoke Id */
 			invokeId = BerDecoder_decodeUint32(buffer, length, bufPos);
+			if (DEBUG) printf("invokeId: %i\n", invokeId);
+			self->lastInvokeId = invokeId;
 			break;
 		case 0xa1: /* get-name-list-request */
 			mmsServer_handleGetNameListRequest(self, buffer, bufPos, bufPos + length,
 					invokeId, response);
 			break;
+
+		case 0x82: /* identify */
+			handleIdentifyRequest(self, invokeId, response);
+			break;
+
 		case 0xa4: /* read-request */
 			mmsServer_handleReadRequest(self, buffer, bufPos, bufPos + length,
 					invokeId, response);
@@ -316,7 +367,7 @@ handleConfirmedRequestPdu(
 					invokeId, response);
 			break;
 		default:
-			writeMmsRejectPdu(&invokeId, REJECT_UNRECOGNIZED_SERVICE, response);
+			mmsServer_writeMmsRejectPdu(&invokeId, MMS_ERROR_REJECT_UNRECOGNIZED_SERVICE, response);
 			return;
 			break;
 		}
@@ -339,7 +390,7 @@ parseMmsPdu(MmsServerConnection* self, ByteBuffer* message, ByteBuffer* response
 	int bufPos = 0;
 
 	uint8_t pduType = buffer[bufPos++];
-	uint32_t pduLength;
+	int pduLength;
 
 	bufPos = BerDecoder_decodeLength(buffer, &pduLength, bufPos, message->size);
 
@@ -362,13 +413,12 @@ parseMmsPdu(MmsServerConnection* self, ByteBuffer* message, ByteBuffer* response
 		IsoConnection_close(self->isoConnection);
 		retVal = MMS_CONCLUDE;
 		break;
-	case 0xa4: /* Reject PDU */
-		//TODO evaluate reject PDU
-		/* silently ignore */
+	case 0xa4: /* Reject PDU - silently ignore */
+	    if (DEBUG) printf("received reject PDU!\n");
 		retVal = MMS_OK;
 		break;
 	default:
-		writeMmsRejectPdu(NULL, REJECT_UNKNOWN_PDU_TYPE, response);
+		mmsServer_writeMmsRejectPdu(NULL, MMS_ERROR_REJECT_UNKNOWN_PDU_TYPE, response);
 		retVal = MMS_ERROR;
 		break;
 	}
@@ -395,7 +445,7 @@ MmsServerConnection_init(MmsServerConnection* connection, MmsServer server, IsoC
 	MmsServerConnection* self;
 
 	if (connection == NULL)
-		self = calloc(1, sizeof(MmsServerConnection));
+		self = (MmsServerConnection*) calloc(1, sizeof(MmsServerConnection));
 	else
 		self = connection;
 
@@ -415,7 +465,7 @@ MmsServerConnection_init(MmsServerConnection* connection, MmsServer server, IsoC
 void
 MmsServerConnection_destroy(MmsServerConnection* self)
 {
-	LinkedList_destroyDeep(self->namedVariableLists, MmsNamedVariableList_destroy);
+	LinkedList_destroyDeep(self->namedVariableLists, (LinkedListValueDeleteFunction) MmsNamedVariableList_destroy);
 	free(self);
 }
 
@@ -470,10 +520,14 @@ MmsServerConnection_getNamedVariableLists(MmsServerConnection* self)
 }
 
 MmsIndication
-MmsServerConnection_parseMessage
-(MmsServerConnection* self, ByteBuffer* message, ByteBuffer* response)
+MmsServerConnection_parseMessage(MmsServerConnection* self, ByteBuffer* message, ByteBuffer* response)
 {
 	return parseMmsPdu(self, message, response);
 }
 
+uint32_t
+MmsServerConnection_getLastInvokeId(MmsServerConnection* self)
+{
+    return self->lastInvokeId;
+}
 

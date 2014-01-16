@@ -45,13 +45,13 @@ public class DataAttributeDefinition {
 		String fcString = ParserUtils.parseAttribute(node, "fc");
 		
 		if (this.name == null)
-			throw new SclParserException("attribute name is missing");
+			throw new SclParserException(node, "attribute name is missing");
 		
 		if (fcString != null)
 			this.fc = FunctionalConstraint.createFromString(fcString);
 
 		if (this.bType == null)
-			throw new SclParserException("attribute bType is missing");
+			throw new SclParserException(node, "attribute bType is missing");
 		else {
 			if (this.bType.equals("Tcmd"))
 				this.type = "Tcmd";

@@ -36,19 +36,21 @@ typedef enum VariableSpecification_PR {
 /* Forward declarations */
 struct ScatteredAccessDescription;
 
+struct VariableSpecification__variableDescription {
+			Address_t	 address;
+			TypeSpecification_t	 typeSpecification;
+			
+			/* Context for parsing across buffer boundaries */
+			asn_struct_ctx_t _asn_ctx;
+		};
+
 /* VariableSpecification */
 typedef struct VariableSpecification {
 	VariableSpecification_PR present;
 	union VariableSpecification_u {
 		ObjectName_t	 name;
 		Address_t	 address;
-		struct VariableSpecification__variableDescription {
-			Address_t	 address;
-			TypeSpecification_t	 typeSpecification;
-			
-			/* Context for parsing across buffer boundaries */
-			asn_struct_ctx_t _asn_ctx;
-		} variableDescription;
+		struct VariableSpecification__variableDescription variableDescription;
 		struct ScatteredAccessDescription	*scatteredAccessDescription;
 		NULL_t	 invalidated;
 	} choice;

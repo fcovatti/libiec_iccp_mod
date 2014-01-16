@@ -25,6 +25,7 @@
 #define ISO_PRESENTATION_H_
 
 #include "byte_buffer.h"
+#include "buffer_chain.h"
 
 typedef struct {
 	uint32_t callingPresentationSelector;
@@ -35,18 +36,13 @@ typedef struct {
 	ByteBuffer nextPayload;
 } IsoPresentation;
 
-typedef enum {
-	PRESENTATION_OK,
-	PRESENTATION_ERROR
-} IsoPresentationIndication;
-
 void
 IsoPresentation_init(IsoPresentation* session);
 
-IsoPresentationIndication
+int
 IsoPresentation_parseUserData(IsoPresentation* session, ByteBuffer* message);
 
-IsoPresentationIndication
+int
 IsoPresentation_parseConnect(IsoPresentation* session, ByteBuffer* message);
 
 void
@@ -59,5 +55,17 @@ IsoPresentation_createCpaMessage(
 		ByteBuffer* writeBuffer,
 		ByteBuffer* payload
 );
+
+void
+IsoPresentation_createCpaMessageBC(IsoPresentation* self, BufferChain writeBuffer, BufferChain payload);
+
+void
+IsoPresentation_createUserData(IsoPresentation* self, ByteBuffer* writeBuffer, ByteBuffer* payload);
+
+void
+IsoPresentation_createUserDataBC(IsoPresentation* self, BufferChain writeBuffer, BufferChain payload);
+
+int
+IsoPresentation_parseAcceptMessage(IsoPresentation* self, ByteBuffer* byteBuffer);
 
 #endif /* ISO_PRESENTATION_H_ */

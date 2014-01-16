@@ -38,8 +38,6 @@
 #include "linked_list.h"
 #include "byte_buffer.h"
 
-
-
 MmsServerConnection*
 MmsServerConnection_init(MmsServerConnection* connection, MmsServer server, IsoConnection isoCon);
 
@@ -64,6 +62,43 @@ MmsServerConnection_getClientAddress(MmsServerConnection* self);
 MmsIndication
 MmsServerConnection_parseMessage
 (MmsServerConnection* connection, ByteBuffer* message, ByteBuffer* response);
+
+
+/** \brief send information report for a single VMD specific variable
+ *
+ *   \param handlerMode send this message in the context of a stack callback handler
+ */
+void
+MmsServerConnection_sendInformationReportSingleVariableVMDSpecific(MmsServerConnection* self,
+		char* itemId, MmsValue* value, bool handlerMode);
+
+
+/** \brief send information report for a VMD specific named variable list
+ *
+ *   \param handlerMode send this message in the context of a stack callback handler
+ */
+void /* send information report for a VMD specific named variable list */
+MmsServerConnection_sendInformationReportVMDSpecific(MmsServerConnection* self, char* itemId, LinkedList values
+        , bool handlerMode);
+
+/** \brief send information report for list of variables
+ *
+ *   \param handlerMode send this message in the context of a stack callback handler
+ */
+void
+MmsServerConnection_sendInformationReportListOfVariables(
+        MmsServerConnection* self,
+        LinkedList /* MmsVariableAccessSpecification */ variableAccessDeclarations,
+        LinkedList /* MmsValue */ values,
+        bool handlerMode
+        );
+
+void
+MmsServerConnection_sendWriteResponse(MmsServerConnection* self, uint32_t invokeId, MmsDataAccessError indication);
+
+
+uint32_t
+MmsServerConnection_getLastInvokeId(MmsServerConnection* self);
 
 #endif /* MMS_SERVER_CONNECTION_H_ */
 

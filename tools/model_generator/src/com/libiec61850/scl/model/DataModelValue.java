@@ -1,5 +1,28 @@
 package com.libiec61850.scl.model;
 
+/*
+ *  DataModelValue.java
+ *
+ *  Copyright 2013 Michael Zillgith
+ *
+ *	This file is part of libIEC61850.
+ *
+ *	libIEC61850 is free software: you can redistribute it and/or modify
+ *	it under the terms of the GNU General Public License as published by
+ *	the Free Software Foundation, either version 3 of the License, or
+ *	(at your option) any later version.
+ *
+ *	libIEC61850 is distributed in the hope that it will be useful,
+ *	but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *	GNU General Public License for more details.
+ *
+ *	You should have received a copy of the GNU General Public License
+ *	along with libIEC61850.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *	See COPYING file for the complete license text.
+ */
+
 import com.libiec61850.scl.types.EnumerationType;
 import com.libiec61850.scl.types.IllegalValueException;
 import com.libiec61850.scl.types.SclType;
@@ -9,6 +32,7 @@ public class DataModelValue {
     private Object value = null;
     
     public DataModelValue(AttributeType type, SclType sclType, String value) throws IllegalValueException {
+    	
         switch (type) {
         case ENUMERATED:
             EnumerationType enumType = (EnumerationType) sclType;
@@ -22,7 +46,10 @@ public class DataModelValue {
         case INT32U:
         case INT24U:
         case INT64:
-            this.value = new Long(value);
+        	if (value.isEmpty())
+        		this.value = new Long(0);
+        	else
+        		this.value = new Long(value);
             break;
         case BOOLEAN:
             if (value.toLowerCase().equals("true"))
@@ -31,10 +58,17 @@ public class DataModelValue {
                 this.value = new Boolean(false);
             break;
         case FLOAT32:
-        	this.value = new Float(value);
+        	if (value.isEmpty())
+        		this.value = new Float(0);
+        	else
+        		this.value = new Float(value);
         	break;
         case FLOAT64:
-        	this.value = new Double(value);
+        	if (value.isEmpty())
+        		this.value = new Double(0);
+        	else
+        		this.value = new Double(value);
+        	break;
         case UNICODE_STRING_255:
         	this.value = value;
         	break;

@@ -6,150 +6,179 @@
 #include <stdlib.h>
 #include "model.h"
 
-IedModel iedModel;
-static DataSet* datasets[];
-static ReportControlBlock* reportControlBlocks[];
-static GSEControlBlock* gseControlBlocks[];
+extern IedModel iedModel;
 static void initializeValues();
-LogicalDevice iedModel_Device1;
-LogicalNode   iedModel_Device1_LLN0;
-DataObject    iedModel_Device1_LLN0_Mod;
-DataAttribute iedModel_Device1_LLN0_Mod_q;
-DataAttribute iedModel_Device1_LLN0_Mod_t;
-DataAttribute iedModel_Device1_LLN0_Mod_ctlModel;
-DataObject    iedModel_Device1_LLN0_Beh;
-DataAttribute iedModel_Device1_LLN0_Beh_stVal;
-DataAttribute iedModel_Device1_LLN0_Beh_q;
-DataAttribute iedModel_Device1_LLN0_Beh_t;
-DataObject    iedModel_Device1_LLN0_Health;
-DataAttribute iedModel_Device1_LLN0_Health_stVal;
-DataAttribute iedModel_Device1_LLN0_Health_q;
-DataAttribute iedModel_Device1_LLN0_Health_t;
-DataObject    iedModel_Device1_LLN0_NamPlt;
-DataAttribute iedModel_Device1_LLN0_NamPlt_vendor;
-DataAttribute iedModel_Device1_LLN0_NamPlt_swRev;
-DataAttribute iedModel_Device1_LLN0_NamPlt_d;
-DataAttribute iedModel_Device1_LLN0_NamPlt_configRev;
-DataAttribute iedModel_Device1_LLN0_NamPlt_ldNs;
-LogicalNode   iedModel_Device1_LPHD1;
-DataObject    iedModel_Device1_LPHD1_PhyNam;
-DataAttribute iedModel_Device1_LPHD1_PhyNam_vendor;
-DataObject    iedModel_Device1_LPHD1_PhyHealth;
-DataAttribute iedModel_Device1_LPHD1_PhyHealth_stVal;
-DataAttribute iedModel_Device1_LPHD1_PhyHealth_q;
-DataAttribute iedModel_Device1_LPHD1_PhyHealth_t;
-DataObject    iedModel_Device1_LPHD1_Proxy;
-DataAttribute iedModel_Device1_LPHD1_Proxy_stVal;
-DataAttribute iedModel_Device1_LPHD1_Proxy_q;
-DataAttribute iedModel_Device1_LPHD1_Proxy_t;
-LogicalNode   iedModel_Device1_DGEN1;
-DataObject    iedModel_Device1_DGEN1_Mod;
-DataAttribute iedModel_Device1_DGEN1_Mod_q;
-DataAttribute iedModel_Device1_DGEN1_Mod_t;
-DataAttribute iedModel_Device1_DGEN1_Mod_ctlModel;
-DataObject    iedModel_Device1_DGEN1_Beh;
-DataAttribute iedModel_Device1_DGEN1_Beh_stVal;
-DataAttribute iedModel_Device1_DGEN1_Beh_q;
-DataAttribute iedModel_Device1_DGEN1_Beh_t;
-DataObject    iedModel_Device1_DGEN1_Health;
-DataAttribute iedModel_Device1_DGEN1_Health_stVal;
-DataAttribute iedModel_Device1_DGEN1_Health_q;
-DataAttribute iedModel_Device1_DGEN1_Health_t;
-DataObject    iedModel_Device1_DGEN1_NamPlt;
-DataAttribute iedModel_Device1_DGEN1_NamPlt_vendor;
-DataAttribute iedModel_Device1_DGEN1_NamPlt_swRev;
-DataAttribute iedModel_Device1_DGEN1_NamPlt_d;
-DataObject    iedModel_Device1_DGEN1_OpTmh;
-DataAttribute iedModel_Device1_DGEN1_OpTmh_stVal;
-DataAttribute iedModel_Device1_DGEN1_OpTmh_q;
-DataAttribute iedModel_Device1_DGEN1_OpTmh_t;
-DataObject    iedModel_Device1_DGEN1_GnOpSt;
-DataAttribute iedModel_Device1_DGEN1_GnOpSt_stVal;
-DataAttribute iedModel_Device1_DGEN1_GnOpSt_q;
-DataAttribute iedModel_Device1_DGEN1_GnOpSt_t;
-DataObject    iedModel_Device1_DGEN1_OpTmsRs;
-DataAttribute iedModel_Device1_DGEN1_OpTmsRs_stVal;
-DataAttribute iedModel_Device1_DGEN1_OpTmsRs_q;
-DataAttribute iedModel_Device1_DGEN1_OpTmsRs_t;
-DataObject    iedModel_Device1_DGEN1_TotWh;
-DataAttribute iedModel_Device1_DGEN1_TotWh_mag;
-DataAttribute iedModel_Device1_DGEN1_TotWh_mag_f;
-DataAttribute iedModel_Device1_DGEN1_TotWh_q;
-DataAttribute iedModel_Device1_DGEN1_TotWh_t;
-LogicalNode   iedModel_Device1_DSCH1;
-DataObject    iedModel_Device1_DSCH1_Mod;
-DataAttribute iedModel_Device1_DSCH1_Mod_q;
-DataAttribute iedModel_Device1_DSCH1_Mod_t;
-DataAttribute iedModel_Device1_DSCH1_Mod_ctlModel;
-DataObject    iedModel_Device1_DSCH1_Beh;
-DataAttribute iedModel_Device1_DSCH1_Beh_stVal;
-DataAttribute iedModel_Device1_DSCH1_Beh_q;
-DataAttribute iedModel_Device1_DSCH1_Beh_t;
-DataObject    iedModel_Device1_DSCH1_Health;
-DataAttribute iedModel_Device1_DSCH1_Health_stVal;
-DataAttribute iedModel_Device1_DSCH1_Health_q;
-DataAttribute iedModel_Device1_DSCH1_Health_t;
-DataObject    iedModel_Device1_DSCH1_NamPlt;
-DataAttribute iedModel_Device1_DSCH1_NamPlt_vendor;
-DataAttribute iedModel_Device1_DSCH1_NamPlt_swRev;
-DataAttribute iedModel_Device1_DSCH1_NamPlt_d;
-DataObject    iedModel_Device1_DSCH1_SchdSt;
-DataAttribute iedModel_Device1_DSCH1_SchdSt_stVal;
-DataAttribute iedModel_Device1_DSCH1_SchdSt_q;
-DataAttribute iedModel_Device1_DSCH1_SchdSt_t;
-DataObject    iedModel_Device1_DSCH1_SchdId;
-DataObject    iedModel_Device1_DSCH1_SchdCat;
-DataObject    iedModel_Device1_DSCH1_SchdTyp;
-DataObject    iedModel_Device1_DSCH1_SchdAbsTm;
-DataAttribute iedModel_Device1_DSCH1_SchdAbsTm_val;
-DataAttribute iedModel_Device1_DSCH1_SchdAbsTm_time;
-LogicalNode   iedModel_Device1_MMXU1;
-DataObject    iedModel_Device1_MMXU1_Mod;
-DataAttribute iedModel_Device1_MMXU1_Mod_q;
-DataAttribute iedModel_Device1_MMXU1_Mod_t;
-DataAttribute iedModel_Device1_MMXU1_Mod_ctlModel;
-DataObject    iedModel_Device1_MMXU1_Beh;
-DataAttribute iedModel_Device1_MMXU1_Beh_stVal;
-DataAttribute iedModel_Device1_MMXU1_Beh_q;
-DataAttribute iedModel_Device1_MMXU1_Beh_t;
-DataObject    iedModel_Device1_MMXU1_Health;
-DataAttribute iedModel_Device1_MMXU1_Health_stVal;
-DataAttribute iedModel_Device1_MMXU1_Health_q;
-DataAttribute iedModel_Device1_MMXU1_Health_t;
-DataObject    iedModel_Device1_MMXU1_NamPlt;
-DataAttribute iedModel_Device1_MMXU1_NamPlt_vendor;
-DataAttribute iedModel_Device1_MMXU1_NamPlt_swRev;
-DataAttribute iedModel_Device1_MMXU1_NamPlt_d;
-LogicalNode   iedModel_Device1_MMXU2;
-DataObject    iedModel_Device1_MMXU2_Mod;
-DataAttribute iedModel_Device1_MMXU2_Mod_q;
-DataAttribute iedModel_Device1_MMXU2_Mod_t;
-DataAttribute iedModel_Device1_MMXU2_Mod_ctlModel;
-DataObject    iedModel_Device1_MMXU2_Beh;
-DataAttribute iedModel_Device1_MMXU2_Beh_stVal;
-DataAttribute iedModel_Device1_MMXU2_Beh_q;
-DataAttribute iedModel_Device1_MMXU2_Beh_t;
-DataObject    iedModel_Device1_MMXU2_Health;
-DataAttribute iedModel_Device1_MMXU2_Health_stVal;
-DataAttribute iedModel_Device1_MMXU2_Health_q;
-DataAttribute iedModel_Device1_MMXU2_Health_t;
-DataObject    iedModel_Device1_MMXU2_NamPlt;
-DataAttribute iedModel_Device1_MMXU2_NamPlt_vendor;
-DataAttribute iedModel_Device1_MMXU2_NamPlt_swRev;
-DataAttribute iedModel_Device1_MMXU2_NamPlt_d;
-DataObject    iedModel_Device1_MMXU2_TotW;
-DataAttribute iedModel_Device1_MMXU2_TotW_mag;
-DataAttribute iedModel_Device1_MMXU2_TotW_mag_f;
-DataAttribute iedModel_Device1_MMXU2_TotW_q;
-DataAttribute iedModel_Device1_MMXU2_TotW_t;
+extern LogicalDevice iedModel_Device1;
+extern LogicalNode   iedModel_Device1_LLN0;
+extern DataObject    iedModel_Device1_LLN0_Mod;
+extern DataAttribute iedModel_Device1_LLN0_Mod_q;
+extern DataAttribute iedModel_Device1_LLN0_Mod_t;
+extern DataAttribute iedModel_Device1_LLN0_Mod_ctlModel;
+extern DataObject    iedModel_Device1_LLN0_Beh;
+extern DataAttribute iedModel_Device1_LLN0_Beh_stVal;
+extern DataAttribute iedModel_Device1_LLN0_Beh_q;
+extern DataAttribute iedModel_Device1_LLN0_Beh_t;
+extern DataObject    iedModel_Device1_LLN0_Health;
+extern DataAttribute iedModel_Device1_LLN0_Health_stVal;
+extern DataAttribute iedModel_Device1_LLN0_Health_q;
+extern DataAttribute iedModel_Device1_LLN0_Health_t;
+extern DataObject    iedModel_Device1_LLN0_NamPlt;
+extern DataAttribute iedModel_Device1_LLN0_NamPlt_vendor;
+extern DataAttribute iedModel_Device1_LLN0_NamPlt_swRev;
+extern DataAttribute iedModel_Device1_LLN0_NamPlt_d;
+extern DataAttribute iedModel_Device1_LLN0_NamPlt_configRev;
+extern DataAttribute iedModel_Device1_LLN0_NamPlt_ldNs;
+extern LogicalNode   iedModel_Device1_LPHD1;
+extern DataObject    iedModel_Device1_LPHD1_PhyNam;
+extern DataAttribute iedModel_Device1_LPHD1_PhyNam_vendor;
+extern DataObject    iedModel_Device1_LPHD1_PhyHealth;
+extern DataAttribute iedModel_Device1_LPHD1_PhyHealth_stVal;
+extern DataAttribute iedModel_Device1_LPHD1_PhyHealth_q;
+extern DataAttribute iedModel_Device1_LPHD1_PhyHealth_t;
+extern DataObject    iedModel_Device1_LPHD1_Proxy;
+extern DataAttribute iedModel_Device1_LPHD1_Proxy_stVal;
+extern DataAttribute iedModel_Device1_LPHD1_Proxy_q;
+extern DataAttribute iedModel_Device1_LPHD1_Proxy_t;
+extern LogicalNode   iedModel_Device1_DGEN1;
+extern DataObject    iedModel_Device1_DGEN1_Mod;
+extern DataAttribute iedModel_Device1_DGEN1_Mod_q;
+extern DataAttribute iedModel_Device1_DGEN1_Mod_t;
+extern DataAttribute iedModel_Device1_DGEN1_Mod_ctlModel;
+extern DataObject    iedModel_Device1_DGEN1_Beh;
+extern DataAttribute iedModel_Device1_DGEN1_Beh_stVal;
+extern DataAttribute iedModel_Device1_DGEN1_Beh_q;
+extern DataAttribute iedModel_Device1_DGEN1_Beh_t;
+extern DataObject    iedModel_Device1_DGEN1_Health;
+extern DataAttribute iedModel_Device1_DGEN1_Health_stVal;
+extern DataAttribute iedModel_Device1_DGEN1_Health_q;
+extern DataAttribute iedModel_Device1_DGEN1_Health_t;
+extern DataObject    iedModel_Device1_DGEN1_NamPlt;
+extern DataAttribute iedModel_Device1_DGEN1_NamPlt_vendor;
+extern DataAttribute iedModel_Device1_DGEN1_NamPlt_swRev;
+extern DataAttribute iedModel_Device1_DGEN1_NamPlt_d;
+extern DataObject    iedModel_Device1_DGEN1_OpTmh;
+extern DataAttribute iedModel_Device1_DGEN1_OpTmh_stVal;
+extern DataAttribute iedModel_Device1_DGEN1_OpTmh_q;
+extern DataAttribute iedModel_Device1_DGEN1_OpTmh_t;
+extern DataObject    iedModel_Device1_DGEN1_GnOpSt;
+extern DataAttribute iedModel_Device1_DGEN1_GnOpSt_stVal;
+extern DataAttribute iedModel_Device1_DGEN1_GnOpSt_q;
+extern DataAttribute iedModel_Device1_DGEN1_GnOpSt_t;
+extern DataObject    iedModel_Device1_DGEN1_OpTmsRs;
+extern DataAttribute iedModel_Device1_DGEN1_OpTmsRs_stVal;
+extern DataAttribute iedModel_Device1_DGEN1_OpTmsRs_q;
+extern DataAttribute iedModel_Device1_DGEN1_OpTmsRs_t;
+extern DataObject    iedModel_Device1_DGEN1_TotWh;
+extern DataAttribute iedModel_Device1_DGEN1_TotWh_mag;
+extern DataAttribute iedModel_Device1_DGEN1_TotWh_mag_f;
+extern DataAttribute iedModel_Device1_DGEN1_TotWh_q;
+extern DataAttribute iedModel_Device1_DGEN1_TotWh_t;
+extern LogicalNode   iedModel_Device1_DSCH1;
+extern DataObject    iedModel_Device1_DSCH1_Mod;
+extern DataAttribute iedModel_Device1_DSCH1_Mod_q;
+extern DataAttribute iedModel_Device1_DSCH1_Mod_t;
+extern DataAttribute iedModel_Device1_DSCH1_Mod_ctlModel;
+extern DataObject    iedModel_Device1_DSCH1_Beh;
+extern DataAttribute iedModel_Device1_DSCH1_Beh_stVal;
+extern DataAttribute iedModel_Device1_DSCH1_Beh_q;
+extern DataAttribute iedModel_Device1_DSCH1_Beh_t;
+extern DataObject    iedModel_Device1_DSCH1_Health;
+extern DataAttribute iedModel_Device1_DSCH1_Health_stVal;
+extern DataAttribute iedModel_Device1_DSCH1_Health_q;
+extern DataAttribute iedModel_Device1_DSCH1_Health_t;
+extern DataObject    iedModel_Device1_DSCH1_NamPlt;
+extern DataAttribute iedModel_Device1_DSCH1_NamPlt_vendor;
+extern DataAttribute iedModel_Device1_DSCH1_NamPlt_swRev;
+extern DataAttribute iedModel_Device1_DSCH1_NamPlt_d;
+extern DataObject    iedModel_Device1_DSCH1_SchdSt;
+extern DataAttribute iedModel_Device1_DSCH1_SchdSt_stVal;
+extern DataAttribute iedModel_Device1_DSCH1_SchdSt_q;
+extern DataAttribute iedModel_Device1_DSCH1_SchdSt_t;
+extern DataObject    iedModel_Device1_DSCH1_SchdId;
+extern DataObject    iedModel_Device1_DSCH1_SchdCat;
+extern DataObject    iedModel_Device1_DSCH1_SchdTyp;
+extern DataObject    iedModel_Device1_DSCH1_SchdAbsTm;
+extern DataAttribute iedModel_Device1_DSCH1_SchdAbsTm_val;
+extern DataAttribute iedModel_Device1_DSCH1_SchdAbsTm_time;
+extern LogicalNode   iedModel_Device1_MMXU1;
+extern DataObject    iedModel_Device1_MMXU1_Mod;
+extern DataAttribute iedModel_Device1_MMXU1_Mod_q;
+extern DataAttribute iedModel_Device1_MMXU1_Mod_t;
+extern DataAttribute iedModel_Device1_MMXU1_Mod_ctlModel;
+extern DataObject    iedModel_Device1_MMXU1_Beh;
+extern DataAttribute iedModel_Device1_MMXU1_Beh_stVal;
+extern DataAttribute iedModel_Device1_MMXU1_Beh_q;
+extern DataAttribute iedModel_Device1_MMXU1_Beh_t;
+extern DataObject    iedModel_Device1_MMXU1_Health;
+extern DataAttribute iedModel_Device1_MMXU1_Health_stVal;
+extern DataAttribute iedModel_Device1_MMXU1_Health_q;
+extern DataAttribute iedModel_Device1_MMXU1_Health_t;
+extern DataObject    iedModel_Device1_MMXU1_NamPlt;
+extern DataAttribute iedModel_Device1_MMXU1_NamPlt_vendor;
+extern DataAttribute iedModel_Device1_MMXU1_NamPlt_swRev;
+extern DataAttribute iedModel_Device1_MMXU1_NamPlt_d;
+extern LogicalNode   iedModel_Device1_MMXU2;
+extern DataObject    iedModel_Device1_MMXU2_Mod;
+extern DataAttribute iedModel_Device1_MMXU2_Mod_q;
+extern DataAttribute iedModel_Device1_MMXU2_Mod_t;
+extern DataAttribute iedModel_Device1_MMXU2_Mod_ctlModel;
+extern DataObject    iedModel_Device1_MMXU2_Beh;
+extern DataAttribute iedModel_Device1_MMXU2_Beh_stVal;
+extern DataAttribute iedModel_Device1_MMXU2_Beh_q;
+extern DataAttribute iedModel_Device1_MMXU2_Beh_t;
+extern DataObject    iedModel_Device1_MMXU2_Health;
+extern DataAttribute iedModel_Device1_MMXU2_Health_stVal;
+extern DataAttribute iedModel_Device1_MMXU2_Health_q;
+extern DataAttribute iedModel_Device1_MMXU2_Health_t;
+extern DataObject    iedModel_Device1_MMXU2_NamPlt;
+extern DataAttribute iedModel_Device1_MMXU2_NamPlt_vendor;
+extern DataAttribute iedModel_Device1_MMXU2_NamPlt_swRev;
+extern DataAttribute iedModel_Device1_MMXU2_NamPlt_d;
+extern DataObject    iedModel_Device1_MMXU2_TotW;
+extern DataAttribute iedModel_Device1_MMXU2_TotW_mag;
+extern DataAttribute iedModel_Device1_MMXU2_TotW_mag_f;
+extern DataAttribute iedModel_Device1_MMXU2_TotW_q;
+extern DataAttribute iedModel_Device1_MMXU2_TotW_t;
+static DataSetEntry ds_Device1_LLN0_dataset1_fcda0 = {
+  "SampleIEDDevice1",
+  "LLN0$ST$Mod$q",
+  -1,
+  NULL,
+  NULL
+};
 
-IedModel iedModel = {
-    "SampleIED",
-    &iedModel_Device1,
-    datasets,
-    reportControlBlocks,
-    gseControlBlocks,
-    initializeValues
+static DataSetEntry ds_Device1_LLN0_dataset1_fcda1 = {
+  "SampleIEDDevice1",
+  "MMXU1$ST$Mod$q",
+  -1,
+  NULL,
+  NULL
+};
+
+static DataSetEntry ds_Device1_LLN0_dataset1_fcda2 = {
+  "SampleIEDDevice1",
+  "MMXU1$CF$Mod$ctlModel",
+  -1,
+  NULL,
+  NULL
+};
+
+static DataSetEntry* ds_Device1_LLN0_dataset1_elements[3] = {
+  &ds_Device1_LLN0_dataset1_fcda0,
+  &ds_Device1_LLN0_dataset1_fcda1,
+  &ds_Device1_LLN0_dataset1_fcda2
+};
+
+static DataSet ds_Device1_LLN0_dataset1 = {
+  "SampleIEDDevice1",
+  "LLN0$dataset1",
+  3,
+  ds_Device1_LLN0_dataset1_elements
+};
+
+static DataSet* datasets[] = {
+  &ds_Device1_LLN0_dataset1,
+  NULL
 };
 
 LogicalDevice iedModel_Device1 = {
@@ -1719,47 +1748,11 @@ DataAttribute iedModel_Device1_MMXU2_TotW_t = {
     NULL
 };
 
-static DataSetEntry ds_Device1_LLN0_dataset1_fcda0 = {
-  "SampleIEDDevice1",
-  "LLN0$ST$Mod$q",
-  -1,
-  NULL,
-  NULL
+
+static GSEControlBlock* gseControlBlocks[] = {
+    NULL
 };
 
-static DataSetEntry ds_Device1_LLN0_dataset1_fcda1 = {
-  "SampleIEDDevice1",
-  "MMXU1$ST$Mod$q",
-  -1,
-  NULL,
-  NULL
-};
-
-static DataSetEntry ds_Device1_LLN0_dataset1_fcda2 = {
-  "SampleIEDDevice1",
-  "MMXU1$CF$Mod$ctlModel",
-  -1,
-  NULL,
-  NULL
-};
-
-static DataSetEntry* ds_Device1_LLN0_dataset1_elements[3] = {
-  &ds_Device1_LLN0_dataset1_fcda0,
-  &ds_Device1_LLN0_dataset1_fcda1,
-  &ds_Device1_LLN0_dataset1_fcda2
-};
-
-static DataSet ds_Device1_LLN0_dataset1 = {
-  "SampleIEDDevice1",
-  "LLN0$dataset1",
-  3,
-  ds_Device1_LLN0_dataset1_elements
-};
-
-static DataSet* datasets[] = {
-  &ds_Device1_LLN0_dataset1,
-  NULL,
-};
 static ReportControlBlock iedModel_Device1_LLN0_report0 = {&iedModel_Device1_LLN0, "LLN0_Events_BuffRep", "LLN0$RP$brcbEV1", true, "dataset1", 1, 18, 239, 50, 900000};
 
 static ReportControlBlock* reportControlBlocks[] = {
@@ -1768,10 +1761,14 @@ static ReportControlBlock* reportControlBlocks[] = {
 };
 
 
-static GSEControlBlock* gseControlBlocks[] = {
-    NULL
+IedModel iedModel = {
+    "SampleIED",
+    &iedModel_Device1,
+    datasets,
+    reportControlBlocks,
+    gseControlBlocks,
+    initializeValues
 };
-
 
 static void
 initializeValues()

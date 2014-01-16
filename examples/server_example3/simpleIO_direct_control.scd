@@ -45,11 +45,18 @@
               <FCDA ldInst="GenericIO" lnClass="GGIO" fc="ST" lnInst="1" doName="SPCSO3" daName="stVal" />
               <FCDA ldInst="GenericIO" lnClass="GGIO" fc="ST" lnInst="1" doName="SPCSO4" daName="stVal" />
             </DataSet>
-            <ReportControl name="EventsRCB" confRev="1" datSet="Events" rptID="Events" buffered="false" intgPd="1000" bufTime="50">
+            <ReportControl name="EventsRCB" confRev="1" datSet="Events" rptID="Events1" buffered="false" intgPd="1000" bufTime="50">
               <TrgOps period="true" />
               <OptFields seqNum="true" timeStamp="true" dataSet="true" reasonCode="true" entryID="true" configRef="true" />
               <RptEnabled max="1" />
             </ReportControl>
+            
+            <ReportControl name="EventsRCB2" confRev="1" datSet="Events" rptID="Events2" buffered="false" intgPd="1000" bufTime="50">
+              <TrgOps period="true" />
+              <OptFields seqNum="true" timeStamp="true" dataSet="true" reasonCode="true" entryID="true" configRef="true" />
+              <RptEnabled max="1" />
+            </ReportControl>
+            
             <DOI name="Mod">
               <DAI name="ctlModel">
                 <Val>status-only</Val>
@@ -119,6 +126,7 @@
       <DO name="Ind4" type="SPS_1_Proxy" />
     </LNodeType>
     <DOType id="INC_1_Mod" cdc="INC">
+      <DA name="stVal" bType="INT32" fc="ST" dchg="true" />
       <DA name="q" bType="Quality" fc="ST" qchg="true" />
       <DA name="t" bType="Timestamp" fc="ST" />
       <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />

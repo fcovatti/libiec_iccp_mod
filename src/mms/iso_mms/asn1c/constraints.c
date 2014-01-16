@@ -36,7 +36,7 @@ struct errbufDesc {
 
 static void
 _asn_i_ctfailcb(void *key, asn_TYPE_descriptor_t *td, const void *sptr, const char *fmt, ...) {
-	struct errbufDesc *arg = key;
+	struct errbufDesc *arg = (struct errbufDesc *) key;
 	va_list ap;
 	ssize_t vlen;
 	ssize_t maxlen;

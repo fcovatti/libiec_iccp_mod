@@ -1,13 +1,47 @@
 /*
  * client_example2.c
  *
- * How to get the model of an unknown device.
+ * This example shows how to browse the data model of an unknown device.
  */
 
 #include "iec61850_client.h"
 
 #include <stdlib.h>
 #include <stdio.h>
+
+void
+printSpaces(int spaces)
+{
+	int i;
+
+	for (i = 0; i < spaces; i++)
+		printf(" ");
+}
+
+void
+printDataDirectory(char* doRef, IedConnection con, int spaces) {
+	IedClientError error;
+
+	LinkedList dataAttributes = IedConnection_getDataDirectory(con, &error, doRef);
+
+	if (dataAttributes != NULL) {
+		LinkedList dataAttribute = LinkedList_getNext(dataAttributes);
+
+		while (dataAttribute != NULL) {
+			char* daName = (char*) dataAttribute->data;
+
+			printSpaces(spaces);
+			printf("DA: %s\n", (char*) dataAttribute->data);
+
+			dataAttribute = LinkedList_getNext(dataAttribute);
+
+			char* daRef = (char*) alloca(129);
+			sprintf(daRef, "%s.%s", doRef, daName);
+			printDataDirectory(daRef, con, spaces + 2);
+		}
+
+	}
+}
 
 int main(int argc, char** argv) {
 
@@ -39,16 +73,16 @@ int main(int argc, char** argv) {
     		printf("LD: %s\n", (char*) device->data);
 
     		LinkedList logicalNodes = IedConnection_getLogicalDeviceDirectory(con, &error,
-    				device->data);
+    				(char*) device->data);
 
     		LinkedList logicalNode = LinkedList_getNext(logicalNodes);
 
     		while (logicalNode != NULL) {
     			printf("  LN: %s\n", (char*) logicalNode->data);
 
-    			char* lnRef = alloca(129);
+    			char* lnRef = (char*) alloca(129);
 
-    			snprintf(lnRef, 128, "%s/%s", (char*) device->data, (char*) logicalNode->data);
+    			sprintf(lnRef, "%s/%s", (char*) device->data, (char*) logicalNode->data);
 
     			LinkedList dataObjects = IedConnection_getLogicalNodeDirectory(con, &error,
     					lnRef, ACSI_CLASS_DATA_OBJECT);
@@ -61,9 +95,79 @@ int main(int argc, char** argv) {
     			    printf("    DO: %s\n", dataObjectName);
 
     			    dataObject = LinkedList_getNext(dataObject);
+
+    			    char* doRef = (char*) alloca(129);
+
+    			    sprintf(doRef, "%s/%s.%s", (char*) device->data, (char*) logicalNode->data, dataObjectName);
+
+    			    printDataDirectory(doRef, con, 6);
     			}
 
     			LinkedList_destroy(dataObjects);
+
+    			LinkedList dataSets = IedConnection_getLogicalNodeDirectory(con, &error, lnRef,
+    					ACSI_CLASS_DATA_SET);
+
+    			LinkedList dataSet = LinkedList_getNext(dataSets);
+
+    			while (dataSet != NULL) {
+    				char* dataSetName = (char*) dataSet->data;
+    				bool isDeletable;
+                    char* dataSetRef = (char*) alloca(129);
+                    sprintf(dataSetRef, "%s.%s", lnRef, dataSetName);
+
+                    LinkedList dataSetMembers = IedConnection_getDataSetDirectory(con, &error, dataSetRef, &isDeletable);
+
+                    if (isDeletable)
+                        printf("    Data set: %s (deletable)\n", dataSetName);
+                    else
+                        printf("    Data set: %s (not deletable)\n", dataSetName);
+
+                    LinkedList dataSetMemberRef = LinkedList_getNext(dataSetMembers);
+
+                    while (dataSetMemberRef != NULL) {
+
+                        char* memberRef = (char*) dataSetMemberRef->data;
+
+                        printf("      %s\n", memberRef);
+
+                        dataSetMemberRef = LinkedList_getNext(dataSetMemberRef);
+                    }
+
+    				dataSet = LinkedList_getNext(dataSet);
+    			}
+
+    			LinkedList_destroy(dataSets);
+
+    			LinkedList reports = IedConnection_getLogicalNodeDirectory(con, &error, lnRef,
+    					ACSI_CLASS_URCB);
+
+    			LinkedList report = LinkedList_getNext(reports);
+
+    			while (report != NULL) {
+    				char* reportName = (char*) report->data;
+
+    				printf("    RP: %s\n", reportName);
+
+    				report = LinkedList_getNext(report);
+    			}
+
+    			LinkedList_destroy(reports);
+
+    			reports = IedConnection_getLogicalNodeDirectory(con, &error, lnRef,
+    			    					ACSI_CLASS_BRCB);
+
+				report = LinkedList_getNext(reports);
+
+				while (report != NULL) {
+					char* reportName = (char*) report->data;
+
+					printf("    BR: %s\n", reportName);
+
+					report = LinkedList_getNext(report);
+				}
+
+				LinkedList_destroy(reports);
 
     			logicalNode = LinkedList_getNext(logicalNode);
     		}

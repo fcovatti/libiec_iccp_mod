@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--This file is generated using Kalkitech SCL Manager IEC61850 Configuration Tool (www.kalkitech.com)-->
 <SCL xmlns="http://www.iec.ch/61850/2003/SCL">
-  <Header id="" version="4.0.2" revision="" toolID="" nameStructure="IEDName">
+  <Header id="" nameStructure="IEDName">
   </Header>
   <Communication>
     <SubNetwork name="subnetwork1" type="8-MMS">
       <Text>Station bus</Text>
       <BitRate unit="b/s">10</BitRate>
-      <ConnectedAP iedName="simpleIO" apName="accessPoint1">
+      <ConnectedAP iedName="beagle" apName="accessPoint1">
         <Address>
           <P type="IP">10.0.0.2</P>
           <P type="IP-SUBNET">255.255.255.0</P>
@@ -19,7 +18,7 @@
       </ConnectedAP>
     </SubNetwork>
   </Communication>
-  <IED name="simpleIO">
+  <IED name="beagle">
     <Services>
       <DynAssociation />
       <GetDirectory />
@@ -40,6 +39,24 @@
         <Authentication />
         <LDevice inst="GenericIO">
           <LN0 lnClass="LLN0" lnType="LLN01" inst="">
+          	<DataSet name="Events" desc="Events">
+              <FCDA ldInst="GenericIO" lnClass="GGIO" fc="ST" lnInst="1" doName="SPCSO1" daName="stVal" />
+              <FCDA ldInst="GenericIO" lnClass="GGIO" fc="ST" lnInst="1" doName="SPCSO2" daName="stVal" />
+              <FCDA ldInst="GenericIO" lnClass="GGIO" fc="ST" lnInst="1" doName="SPCSO3" daName="stVal" />
+              <FCDA ldInst="GenericIO" lnClass="GGIO" fc="ST" lnInst="1" doName="DPCSO1" daName="stVal" />
+            </DataSet>
+            <ReportControl name="EventsRCB" confRev="1" datSet="Events" rptID="Events1" buffered="false" intgPd="1000" bufTime="50">
+              <TrgOps period="true" />
+              <OptFields seqNum="true" timeStamp="true" dataSet="true" reasonCode="true" entryID="true" configRef="true" />
+              <RptEnabled max="1" />
+            </ReportControl>
+            
+            <ReportControl name="EventsRCB2" confRev="1" datSet="Events" rptID="Events2" buffered="false" intgPd="1000" bufTime="50">
+              <TrgOps period="true" />
+              <OptFields seqNum="true" timeStamp="true" dataSet="true" reasonCode="true" entryID="true" configRef="true" />
+              <RptEnabled max="1" />
+            </ReportControl>
+            
             <DOI name="Mod">
               <DAI name="ctlModel">
                 <Val>status-only</Val>
@@ -68,9 +85,9 @@
                 <Val>direct-with-normal-security</Val>
               </DAI>
             </DOI>
-            <DOI name="SPCSO4">
+            <DOI name="DPCSO1">
               <DAI name="ctlModel">
-                <Val>direct-with-normal-security</Val>
+                <Val>direct-with-enhanced-security</Val>
               </DAI>
             </DOI>
           </LN>
@@ -102,13 +119,14 @@
       <DO name="SPCSO1" type="SPC_2_SPCSO1" />
       <DO name="SPCSO2" type="SPC_1_SPCSO2" />
       <DO name="SPCSO3" type="SPC_1_SPCSO3" />
-      <DO name="SPCSO4" type="SPC_1_SPCSO1" />
+      <DO name="DPCSO1" type="DPC_1_DPCSO1" />
       <DO name="Ind1" type="SPS_1_Proxy" />
       <DO name="Ind2" type="SPS_1_Proxy" />
       <DO name="Ind3" type="SPS_1_Proxy" />
       <DO name="Ind4" type="SPS_1_Proxy" />
     </LNodeType>
     <DOType id="INC_1_Mod" cdc="INC">
+      <DA name="stVal" bType="INT32" fc="ST" dchg="true" />
       <DA name="q" bType="Quality" fc="ST" qchg="true" />
       <DA name="t" bType="Timestamp" fc="ST" />
       <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
@@ -143,7 +161,8 @@
       <DA name="q" bType="Quality" fc="MX" qchg="true" />
       <DA name="t" bType="Timestamp" fc="MX" />
     </DOType>
-    <DOType id="SPC_1_SPCSO1" cdc="SPC">
+    <DOType id="DPC_1_DPCSO1" cdc="DPC">
+      <DA name="stVal" bType="Dbpos" fc="ST" dchg="true" />
       <DA name="q" bType="Quality" fc="ST" qchg="true" />
       <DA name="Oper" type="SPCOperate_1" bType="Struct" fc="CO" />
       <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
@@ -155,18 +174,21 @@
       <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
     </DOType>
     <DOType id="SPC_2_SPCSO1" cdc="SPC">
+      <DA name="stVal" bType="BOOLEAN" fc="ST" dchg="true" />
       <DA name="q" bType="Quality" fc="ST" qchg="true" />
       <DA name="Oper" type="SPCOperate_1" bType="Struct" fc="CO" />
       <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
       <DA name="t" bType="Timestamp" fc="ST" />
     </DOType>
     <DOType id="SPC_1_SPCSO2" cdc="SPC">
+      <DA name="stVal" bType="BOOLEAN" fc="ST" dchg="true" />
       <DA name="q" bType="Quality" fc="ST" qchg="true" />
       <DA name="Oper" type="SPCOperate_1" bType="Struct" fc="CO" />
       <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
       <DA name="t" bType="Timestamp" fc="ST" />
     </DOType>
     <DOType id="SPC_1_SPCSO3" cdc="SPC">
+      <DA name="stVal" bType="BOOLEAN" fc="ST" dchg="true" />
       <DA name="q" bType="Quality" fc="ST" qchg="true" />
       <DA name="Oper" type="SPCOperate_1" bType="Struct" fc="CO" />
       <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />

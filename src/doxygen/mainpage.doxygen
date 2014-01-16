@@ -1,4 +1,4 @@
-/*! \mainpage API Reference Manual (version 0.4)
+/*! \mainpage API Reference Manual (version 0.6)
  *
  * \section intro_sec Introduction
  *
@@ -22,13 +22,14 @@
  *
  * \section iec_client_api IEC 61850 client API
  *
- *
+ * The IEC 61850 client API is a high-level API to access IEC 61850 compliant devices. The API provides
+ * access to MMS services that are supported by IEC 61850. It also contains a GOOSE subscriber.
  *
  * \section client_api MMS client API
  * 
- * The client API is not yet IEC 61850 specific but is a generic MMS client API that provides
- * only the features required by the IEC 61850 MMS Mapping. In the future a higher level API
- * will be created that will be more specific to IEC 61850.
+ * This client API is not IEC 61850 specific but is a generic MMS client API that provides
+ * only the features required by the IEC 61850 MMS Mapping. This API can be used if low-level access
+ * to MMS services is required.
  *
  * \section server_api IEC 61850 Server API
  *

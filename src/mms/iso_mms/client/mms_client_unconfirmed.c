@@ -51,7 +51,8 @@ int
 mmsClient_createUnconfirmedPDU(char* domainId, char* itemId, uint32_t time_stamp,
 		ByteBuffer* writeBuffer)
 {
-	MmsPdu_t* mmsPdu = mmsClient_createUnconfirmedPdu();
+	MmsPdu_t* mmsPdu = ( MmsPdu_t*) mmsClient_createUnconfirmedResponsePdu();
+	
 	mmsPdu->choice.unconfirmedPDU.unconfirmedService.present = UnconfirmedService_PR_informationReport;
 
 	InformationReport_t* report =
@@ -76,9 +77,9 @@ mmsClient_createUnconfirmedPDU(char* domainId, char* itemId, uint32_t time_stamp
 	listOfVars->variableSpecification.choice.name.choice.domainspecific.itemId.size = strlen("Transfer_Report_ACK");
 	report->variableAccessSpecification.choice.listOfVariable.list.array[0] = listOfVars;
 */
-	report->variableAccessSpecification.choice.listOfVariable.list.array[0] = createNewDomainVariableSpecification(domainId, "Transfer_Report_ACK");
+	report->variableAccessSpecification.choice.listOfVariable.list.array[0] =(ListOfVariableSeq_t*) createNewDomainVariableSpecification(domainId, "Transfer_Report_ACK");
 
-	report->variableAccessSpecification.choice.listOfVariable.list.array[1] =
+	report->variableAccessSpecification.choice.listOfVariable.list.array[1] = (ListOfVariableSeq_t*)
 			createNewDomainVariableSpecification(domainId, "Transfer_Set_Time_Stamp");
 
 
@@ -95,7 +96,7 @@ mmsClient_createUnconfirmedPDU(char* domainId, char* itemId, uint32_t time_stamp
 	report->listOfAccessResult.list.array[0] = accessResult1;
 	report->listOfAccessResult.list.array[0]->present = AccessResult_PR_structure;
 	report->listOfAccessResult.list.array[0]->choice.structure.list.count = 3;
-	report->listOfAccessResult.list.array[0]->choice.structure.list.array = dataArray;
+	report->listOfAccessResult.list.array[0]->choice.structure.list.array =(Data_t**) dataArray;
 
 
 	MmsValue * value1 = MmsValue_newUnsignedFromUint32(1);
@@ -119,7 +120,7 @@ mmsClient_createUnconfirmedPDU(char* domainId, char* itemId, uint32_t time_stamp
 	asn_enc_rval_t rval;
 
 	rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
-				mmsClient_write_out, (void*) writeBuffer);
+				(asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
 
 
 	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);

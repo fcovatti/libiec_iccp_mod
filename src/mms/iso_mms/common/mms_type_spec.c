@@ -26,7 +26,7 @@
 #include "mms_type_spec.h"
 
 void
-MmsTypeSpecification_delete(MmsTypeSpecification* typeSpec)
+MmsVariableSpecification_destroy(MmsVariableSpecification* typeSpec)
 {
 	if (typeSpec->name != NULL)
 		free(typeSpec->name);
@@ -35,13 +35,13 @@ MmsTypeSpecification_delete(MmsTypeSpecification* typeSpec)
 		int elementCount = typeSpec->typeSpec.structure.elementCount;
 		int i;
 		for (i = 0; i < elementCount; i++) {
-			MmsTypeSpecification_delete(typeSpec->typeSpec.structure.elements[i]);
+			MmsVariableSpecification_destroy(typeSpec->typeSpec.structure.elements[i]);
 		}
 
 		free(typeSpec->typeSpec.structure.elements);
 	}
 	else if (typeSpec->type == MMS_ARRAY) {
-		MmsTypeSpecification_delete(typeSpec->typeSpec.array.elementTypeSpec);
+		MmsVariableSpecification_destroy(typeSpec->typeSpec.array.elementTypeSpec);
 	}
 
 	free(typeSpec);
@@ -62,7 +62,7 @@ directChildStrLen(char* childId)
 }
 
 MmsValue*
-MmsTypeSpecification_getChildValue(MmsTypeSpecification* typeSpec, MmsValue* value, char* childId)
+MmsVariableSpecification_getChildValue(MmsVariableSpecification* typeSpec, MmsValue* value, char* childId)
 {
 	if (typeSpec->type == MMS_STRUCTURE) {
 		int childLen = directChildStrLen(childId);
@@ -76,7 +76,7 @@ MmsTypeSpecification_getChildValue(MmsTypeSpecification* typeSpec, MmsValue* val
 						return value->value.structure.components[i];
 					}
 					else {
-						return MmsTypeSpecification_getChildValue(typeSpec->typeSpec.structure.elements[i],
+						return MmsVariableSpecification_getChildValue(typeSpec->typeSpec.structure.elements[i],
 								value->value.structure.components[i], childId + childLen + 1);
 					}
 				}
@@ -86,4 +86,98 @@ MmsTypeSpecification_getChildValue(MmsTypeSpecification* typeSpec, MmsValue* val
 	}
 	else
 		return NULL;
+}
+
+MmsType
+MmsVariableSpecification_getType(MmsVariableSpecification* self)
+{
+	return self->type;
+}
+
+char*
+MmsVariableSpecification_getName(MmsVariableSpecification* self)
+{
+	return self->name;
+}
+
+LinkedList /* <char*> */
+MmsVariableSpecification_getStructureElements(MmsVariableSpecification* self)
+{
+	if (self->type != MMS_STRUCTURE)
+		return NULL;
+
+	LinkedList elementNames = LinkedList_create();
+
+	int i;
+	for (i = 0; i < self->typeSpec.structure.elementCount; i++) {
+		MmsVariableSpecification* typeSpec = self->typeSpec.structure.elements[i];
+
+		LinkedList_add(elementNames, copyString(typeSpec->name));
+	}
+
+	return elementNames;
+}
+
+
+int
+MmsVariableSpecification_getSize(MmsVariableSpecification* self)
+{
+	switch(self->type) {
+	case MMS_STRUCTURE:
+		return self->typeSpec.structure.elementCount;
+	case MMS_ARRAY:
+		return self->typeSpec.array.elementCount;
+	case MMS_INTEGER:
+		return self->typeSpec.integer;
+	case MMS_UNSIGNED:
+		return self->typeSpec.unsignedInteger;
+	case MMS_FLOAT:
+		return self->typeSpec.floatingpoint.formatWidth;
+	case MMS_BIT_STRING:
+		return self->typeSpec.bitString;
+	case MMS_BINARY_TIME:
+		return self->typeSpec.binaryTime;
+	case MMS_OCTET_STRING:
+		return self->typeSpec.octetString;
+	case MMS_VISIBLE_STRING:
+		return self->typeSpec.visibleString;
+	case MMS_STRING:
+		return self->typeSpec.mmsString;
+	default:
+		return -1;
+	}
+
+}
+
+MmsVariableSpecification*
+MmsVariableSpecification_getChildSpecificationByIndex(MmsVariableSpecification* self, int index)
+{
+	if (self->type != MMS_STRUCTURE)
+		return NULL;
+
+	if (index >= self->typeSpec.structure.elementCount)
+		return NULL;
+
+	if (index < 0)
+		return NULL;
+
+	return self->typeSpec.structure.elements[index];
+}
+
+MmsVariableSpecification*
+MmsVariableSpecification_getArrayElementSpecification(MmsVariableSpecification* self)
+{
+	if (self->type != MMS_ARRAY)
+		return NULL;
+
+	return self->typeSpec.array.elementTypeSpec;
+}
+
+int
+MmsVariableSpecification_getExponentWidth(MmsVariableSpecification* self)
+{
+	if (self->type != MMS_FLOAT)
+		return -1;
+
+	return (int) self->typeSpec.floatingpoint.exponentWidth;
 }

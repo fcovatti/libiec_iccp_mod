@@ -32,6 +32,7 @@ typedef struct {
     MmsValue* confRev;
     MmsValue* timeOfEntry;
     DataSet* dataSet;
+    bool isDynamicDataSet;
     bool enabled;
     bool reserved;
     bool bufferd;
@@ -45,6 +46,7 @@ typedef struct {
     uint64_t reservationTimeout;
     MmsServerConnection* clientConnection;
     ReportInclusionFlag* inclusionFlags;
+    int triggerOps;
 } ReportControl;
 
 ReportControl*
@@ -59,17 +61,18 @@ ReportControl_valueUpdated(ReportControl* self, int dataSetEntryIndex, ReportInc
 MmsValue*
 ReportControl_getRCBValue(ReportControl* rc, char* elementName);
 
-MmsTypeSpecification*
+MmsVariableSpecification*
 Reporting_createMmsBufferedRCBs(MmsMapping* self, MmsDomain* domain,
         LogicalNode* logicalNode, int reportsCount);
 
-MmsTypeSpecification*
+MmsVariableSpecification*
 Reporting_createMmsUnbufferedRCBs(MmsMapping* self, MmsDomain* domain,
         LogicalNode* logicalNode, int reportsCount);
 
-MmsValueIndication
+MmsDataAccessError
 Reporting_RCBWriteAccessHandler(MmsMapping* self, ReportControl* rc, char* elementName, MmsValue* value,
         MmsServerConnection* connection);
+
 
 void
 Reporting_processReportEvents(MmsMapping* self, uint64_t currentTimeInMs);

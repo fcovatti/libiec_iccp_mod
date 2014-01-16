@@ -37,6 +37,11 @@ struct sMmsMapping {
     LinkedList observedObjects;
     bool reportThreadRunning;
     Thread reportWorkerThread;
+
+    IedServer iedServer;
+
+    IedConnectionIndicationHandler connectionIndicationHandler;
+    void* connectionIndicationHandlerParameter;
 };
 
 #endif /* MMS_MAPPING_INTERNAL_H_ */

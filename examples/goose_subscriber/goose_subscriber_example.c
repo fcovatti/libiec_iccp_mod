@@ -1,6 +1,8 @@
 /*
  * goose_subscriber_example.c
  *
+ * This is an example for a standalone GOOSE subscriber
+ *
  * Has to be started as root in Linux.
  */
 

@@ -83,9 +83,11 @@ public class StaticModelGenerator {
         SclParser sclParser = new SclParser(stream);
 
         IED ied = sclParser.getIed();
-
-       
         
+        if (ied == null) {
+        	System.out.println("No data model present in SCL file! Exit.");
+        }
+    
         AccessPoint accessPoint = ied.getAccessPoint();
         
         communication = sclParser.getCommunication();
@@ -112,7 +114,6 @@ public class StaticModelGenerator {
                         
             }
         }
-        
         
         
         printCFileHeader(icdFile);
@@ -183,17 +184,14 @@ public class StaticModelGenerator {
     }
     
     private void printDeviceModelDefinitions(IED ied) {
-        cOut.println("\nIedModel iedModel = {");
-        cOut.println("    \"" + ied.getName() + "\"," );
+
         
+        
+        printDataSets(ied);
+           
         List<LogicalDevice> logicalDevices = ied.getAccessPoint().getServer().getLogicalDevices();
         
-        String firstLogicalDeviceName = logicalDevices.get(0).getInst();
-        cOut.println("    &iedModel_" + firstLogicalDeviceName + "," );
-        cOut.println("    datasets,");
-        cOut.println("    reportControlBlocks,");
-        cOut.println("    gseControlBlocks,");
-        cOut.println("    initializeValues\n};");
+        
         
         for (int i = 0; i < logicalDevices.size(); i++) {
 
@@ -222,13 +220,17 @@ public class StaticModelGenerator {
             printLogicalNodeDefinitions(ldName, logicalDevice.getLogicalNodes());
         }
         
-        
-        printDataSets(ied);
-        
-        printReportDefinitions();
-        
         printGSEDefinitions();
+        printReportDefinitions();
 
+        String firstLogicalDeviceName = logicalDevices.get(0).getInst();
+        cOut.println("\nIedModel iedModel = {");
+        cOut.println("    \"" + ied.getName() + "\"," );
+        cOut.println("    &iedModel_" + firstLogicalDeviceName + "," );
+        cOut.println("    datasets,");
+        cOut.println("    reportControlBlocks,");
+        cOut.println("    gseControlBlocks,");
+        cOut.println("    initializeValues\n};");
     }
 
     private void printReportDefinitions() {
@@ -439,23 +441,20 @@ public class StaticModelGenerator {
 
     private void printForwardDeclarations(Server server) {
         
-        cOut.println("IedModel iedModel;");
-        cOut.println("static DataSet* datasets[];");
-        cOut.println("static ReportControlBlock* reportControlBlocks[];");
-        cOut.println("static GSEControlBlock* gseControlBlocks[];");
+        cOut.println("extern IedModel iedModel;");
         cOut.println("static void initializeValues();");
         hOut.println("extern IedModel iedModel;");
         
         for (LogicalDevice logicalDevice : server.getLogicalDevices()) {
             String ldName = "iedModel_" + logicalDevice.getInst();
 
-            cOut.println("LogicalDevice " + ldName + ";");
+            cOut.println("extern LogicalDevice " + ldName + ";");
             hOut.println("extern LogicalDevice " + ldName + ";");
 
             for (LogicalNode logicalNode : logicalDevice.getLogicalNodes()) {
                 String lnName = ldName + "_" + logicalNode.getName();
 
-                cOut.println("LogicalNode   " + lnName + ";");
+                cOut.println("extern LogicalNode   " + lnName + ";");
                 hOut.println("extern LogicalNode   " + lnName + ";");
 
                 printDataObjectForwardDeclarations(lnName,
@@ -470,7 +469,7 @@ public class StaticModelGenerator {
         for (DataObject dataObject : dataObjects) {
             String doName = prefix + "_" + dataObject.getName();
 
-            cOut.println("DataObject    " + doName + ";");
+            cOut.println("extern DataObject    " + doName + ";");
             hOut.println("extern DataObject    " + doName + ";");
 
             if (dataObject.getSubDataObjects() != null) {
@@ -488,7 +487,7 @@ public class StaticModelGenerator {
         for (DataAttribute dataAttribute : dataAttributes) {
             String daName = doName + "_" + dataAttribute.getName();
 
-            cOut.println("DataAttribute " + daName + ";");
+            cOut.println("extern DataAttribute " + daName + ";");
             hOut.println("extern DataAttribute " + daName + ";");
 
             if (dataAttribute.getSubDataAttributes() != null)
@@ -624,96 +623,122 @@ public class StaticModelGenerator {
         int reportNumber = 0;
 
         for (ReportControlBlock rcb : reportControlBlocks) {
-            String rcbVariableName = lnPrefix + "_report" + reportNumber;
             
-            String rcbString = "static ReportControlBlock " + rcbVariableName
-                    + " = {";
-
-            rcbString += "&" + lnPrefix + ", ";
             
-            rcbString += "\"" + rcb.getName() + "\", ";
+            if (rcb.isIndexed()) {
+            	
+            	int maxInstances = 1;
+            	
+            	if (rcb.getRptEna() != null) {
+            		maxInstances = rcb.getRptEna().getMaxInstances();
+            	}
             
-            if (rcb.getRptID() == null)
-                rcbString += "NULL, ";
-            else
-                rcbString += "\"" + rcb.getRptID() + "\", ";
-
-            if (rcb.isBuffered())
-                rcbString += "true, ";
-            else
-                rcbString += "false, ";
-
-            if (rcb.getDataSet() != null)
-                rcbString += "\"" + rcb.getDataSet() + "\", ";
-            else
-                rcbString += "NULL, ";
-            
-            if (rcb.getConfRef() != null)
-                rcbString += rcb.getConfRef().toString() + ", ";
-            else
-                rcbString += "0, ";
-            
-            int triggerOps = 0;
-            
-            if (rcb.getTriggerOptions() != null) {
-                if (rcb.getTriggerOptions().isDchg())
-                    triggerOps += 2;
-                if (rcb.getTriggerOptions().isQchg())
-                    triggerOps += 4;
-                if (rcb.getTriggerOptions().isDupd())
-                    triggerOps += 8;
-                if (rcb.getTriggerOptions().isPeriod())
-                    triggerOps += 16;
-                if (rcb.getTriggerOptions().isGi())
-                    triggerOps += 32;
+            	
+            	for (int i = 0; i < maxInstances; i++) {
+            		String index = String.format("%02d", (i + 1));
+            		
+            		System.out.println("print report instance " + index);
+            		
+            		printReportControlBlockInstance(lnPrefix, rcb, index, reportNumber);
+                	reportNumber++;
+            	}
             }
-            else
-                triggerOps = 32;
-            
-            rcbString += triggerOps + ", ";
-            
-            int options = 0;
-            
-            if (rcb.getOptionFields() != null) {
-                if (rcb.getOptionFields().isSeqNum())
-                    options += 1;
-                if (rcb.getOptionFields().isTimeStamp())
-                    options += 2;
-                if (rcb.getOptionFields().isReasonCode())
-                    options += 4;
-                if (rcb.getOptionFields().isDataSet())
-                    options += 8;
-                if (rcb.getOptionFields().isDataRef())
-                    options += 16;
-                if (rcb.getOptionFields().isBufOvfl())
-                    options += 32;
-                if (rcb.getOptionFields().isEntryID())
-                    options += 64;
-                if (rcb.getOptionFields().isConfigRef())
-                    options += 128;
+            else {
+            	printReportControlBlockInstance(lnPrefix, rcb, "", reportNumber);
+            	reportNumber++;
             }
-            else
-                options = 32;
-            
-            rcbString += options + ", ";
-            
-            rcbString += rcb.getBufferTime() + ", ";
-            
-            if (rcb.getIntegrityPeriod() != null)
-                rcbString += rcb.getIntegrityPeriod().toString();
-            else
-                rcbString += "0";
-            
-            rcbString += "};\n";
-
-            this.reportControlBlocks.append(rcbString);
-
-            this.rcbVariableNames.add(rcbVariableName);
-            
-            reportNumber++;
+               
         }
 
     }
+
+	private void printReportControlBlockInstance(String lnPrefix,
+			ReportControlBlock rcb, String index, int reportNumber) {
+		String rcbVariableName = lnPrefix + "_report" + reportNumber;
+		
+		String rcbString = "static ReportControlBlock " + rcbVariableName
+		        + " = {";
+
+		rcbString += "&" + lnPrefix + ", ";
+		
+		rcbString += "\"" + rcb.getName() + index + "\", ";
+		
+		if (rcb.getRptID() == null)
+		    rcbString += "NULL, ";
+		else
+		    rcbString += "\"" + rcb.getRptID() + "\", ";
+
+		if (rcb.isBuffered())
+		    rcbString += "true, ";
+		else
+		    rcbString += "false, ";
+
+		if (rcb.getDataSet() != null)
+		    rcbString += "\"" + rcb.getDataSet() + "\", ";
+		else
+		    rcbString += "NULL, ";
+		
+		if (rcb.getConfRef() != null)
+		    rcbString += rcb.getConfRef().toString() + ", ";
+		else
+		    rcbString += "0, ";
+		
+		int triggerOps = 0;
+		
+		if (rcb.getTriggerOptions() != null) {
+		    if (rcb.getTriggerOptions().isDchg())
+		        triggerOps += 2;
+		    if (rcb.getTriggerOptions().isQchg())
+		        triggerOps += 4;
+		    if (rcb.getTriggerOptions().isDupd())
+		        triggerOps += 8;
+		    if (rcb.getTriggerOptions().isPeriod())
+		        triggerOps += 16;
+		    if (rcb.getTriggerOptions().isGi())
+		        triggerOps += 32;
+		}
+		else
+		    triggerOps = 32;
+		
+		rcbString += triggerOps + ", ";
+		
+		int options = 0;
+		
+		if (rcb.getOptionFields() != null) {
+		    if (rcb.getOptionFields().isSeqNum())
+		        options += 1;
+		    if (rcb.getOptionFields().isTimeStamp())
+		        options += 2;
+		    if (rcb.getOptionFields().isReasonCode())
+		        options += 4;
+		    if (rcb.getOptionFields().isDataSet())
+		        options += 8;
+		    if (rcb.getOptionFields().isDataRef())
+		        options += 16;
+		    if (rcb.getOptionFields().isBufOvfl())
+		        options += 32;
+		    if (rcb.getOptionFields().isEntryID())
+		        options += 64;
+		    if (rcb.getOptionFields().isConfigRef())
+		        options += 128;
+		}
+		else
+		    options = 32;
+		
+		rcbString += options + ", ";
+		
+		rcbString += rcb.getBufferTime() + ", ";
+		
+		if (rcb.getIntegrityPeriod() != null)
+		    rcbString += rcb.getIntegrityPeriod().toString();
+		else
+		    rcbString += "0";
+		
+		rcbString += "};\n";
+
+		this.reportControlBlocks.append(rcbString);
+	    this.rcbVariableNames.add(rcbVariableName);
+	}
     
     private static String toMmsString(String iecString) {
         return iecString.replace('.', '$');
@@ -747,8 +772,8 @@ public class StaticModelGenerator {
                     for (FunctionalConstraintData fcda : dataSet.getFcda()) {
                         String dataSetEntryName = dataSetVariableName + "_fcda" + fcdaCount;
                         
-                        cOut.println("static DataSetEntry " + dataSetEntryName + " = {");
-                        cOut.println("  \"" + ied.getName() + logicalDevice.getInst() + "\",");
+                        cOut.println("static DataSetEntry " + dataSetEntryName + " = {");                        
+                        cOut.println("  \"" + ied.getName() + fcda.getLdInstance() + "\",");
                         
                         String mmsVariableName = "";
                         
@@ -807,7 +832,7 @@ public class StaticModelGenerator {
         
         cOut.print("\nstatic DataSet* datasets[] = {");
         cOut.println(dataSetNames);
-        cOut.println("  NULL,\n};");
+        cOut.println("  NULL\n};");
         
     }
 

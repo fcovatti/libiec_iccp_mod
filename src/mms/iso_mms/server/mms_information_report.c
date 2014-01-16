@@ -27,8 +27,177 @@
 #include "mms_common_internal.h"
 #include "mms_access_result.h"
 
+#include "ber_encoder.h"
+
 void
-MmsServerConnection_sendInformationReport(MmsServerConnection* self, char* domainId, char* itemId, LinkedList values)
+MmsServerConnection_sendInformationReportSingleVariableVMDSpecific(MmsServerConnection* self,
+		char* itemId, MmsValue* value, bool handlerMode)
+{
+	uint32_t itemIdSize = strlen(itemId);
+	uint32_t varSpecSize = 1 + BerEncoder_determineLengthSize(itemIdSize) + itemIdSize;
+	uint32_t sequenceSize = 1 + BerEncoder_determineLengthSize(varSpecSize) + varSpecSize;
+	uint32_t listOfVariableSize = 1 + BerEncoder_determineLengthSize(sequenceSize) + sequenceSize;
+
+	uint32_t accessResultSize = mmsServer_encodeAccessResult(value, NULL, 0, false);
+
+	uint32_t listOfAccessResultSize = 1 + BerEncoder_determineLengthSize(accessResultSize) + accessResultSize;
+
+	uint32_t variableSpecSize = 1 + BerEncoder_determineLengthSize(listOfVariableSize) + listOfVariableSize;
+
+	uint32_t informationReportContentSize = variableSpecSize + listOfAccessResultSize;
+
+	uint32_t informationReportSize = 1 + BerEncoder_determineLengthSize(informationReportContentSize) +
+			informationReportContentSize;
+
+	if (DEBUG) printf("sendInfReportSingle variable: %s\n", itemId);
+
+	ByteBuffer* reportBuffer = ByteBuffer_create(NULL, self->maxPduSize);
+
+	uint8_t* buffer = reportBuffer->buffer;
+	int bufPos = 0;
+
+	/* encode information report header */
+	bufPos = BerEncoder_encodeTL(0xa3, informationReportSize, buffer, bufPos);
+	bufPos = BerEncoder_encodeTL(0xa0, informationReportContentSize, buffer, bufPos);
+
+	/* encode list of variable access specifications */
+	bufPos = BerEncoder_encodeTL(0xa0, listOfVariableSize, buffer, bufPos);
+	bufPos = BerEncoder_encodeTL(0x30, sequenceSize, buffer, bufPos);
+	bufPos = BerEncoder_encodeTL(0xa0, varSpecSize, buffer, bufPos);
+	bufPos = BerEncoder_encodeStringWithTag(0x80, itemId, buffer, bufPos);
+
+	/* encode access result (variable value) */
+	bufPos = BerEncoder_encodeTL(0xa0, accessResultSize, buffer, bufPos);
+	bufPos = mmsServer_encodeAccessResult(value, buffer, bufPos, true);
+
+    reportBuffer->size = bufPos;
+
+    IsoConnection_sendMessage(self->isoConnection, reportBuffer, handlerMode);
+
+    ByteBuffer_destroy(reportBuffer);
+}
+
+void
+MmsServerConnection_sendInformationReportListOfVariables(
+        MmsServerConnection* self,
+        LinkedList /* MmsVariableAccessSpecification */ variableAccessDeclarations,
+        LinkedList /* MmsValue */ values,
+        bool handlerMode
+        )
+{
+    /* determine message size */
+    uint32_t listOfVarSpecSize = 0;
+
+    int listSize = LinkedList_size(variableAccessDeclarations);
+
+    uint32_t* varSpecSize = (uint32_t*) alloca(listSize * sizeof(uint32_t));
+
+    int i = 0;
+
+    LinkedList specElement = LinkedList_getNext(variableAccessDeclarations);
+
+    while (specElement != NULL) {
+        MmsVariableAccessSpecification* spec = (MmsVariableAccessSpecification*) specElement->data;
+
+        varSpecSize[i] = BerEncoder_determineEncodedStringSize(spec->itemId);
+
+        if (spec->domainId != NULL) {
+            varSpecSize[i] += BerEncoder_determineEncodedStringSize(spec->domainId);
+            varSpecSize[i] += BerEncoder_determineLengthSize(varSpecSize[i]) + 1;
+        }
+
+        listOfVarSpecSize += varSpecSize[i];
+
+        i++;
+        specElement = LinkedList_getNext(specElement);
+    }
+
+    uint32_t sequenceSize = 1 + BerEncoder_determineLengthSize(listOfVarSpecSize) + listOfVarSpecSize;
+    uint32_t listOfVariableSize = 1 + BerEncoder_determineLengthSize(sequenceSize) + sequenceSize;
+
+
+    uint32_t accessResultSize = 0;
+
+    LinkedList valueElement = LinkedList_getNext(values);
+
+    while (valueElement != NULL) {
+        MmsValue* value = (MmsValue*) valueElement->data;
+
+        accessResultSize += mmsServer_encodeAccessResult(value, NULL, 0, false);
+
+        valueElement = LinkedList_getNext(valueElement);
+    }
+
+    uint32_t listOfAccessResultSize = 1 + BerEncoder_determineLengthSize(accessResultSize) + accessResultSize;
+
+    uint32_t variableSpecSize = 1 + BerEncoder_determineLengthSize(listOfVariableSize) + listOfVariableSize;
+
+    uint32_t informationReportContentSize = variableSpecSize + listOfAccessResultSize;
+
+    uint32_t informationReportSize = 1 + BerEncoder_determineLengthSize(informationReportContentSize) +
+            informationReportContentSize;
+
+    /* encode message */
+    ByteBuffer* reportBuffer = ByteBuffer_create(NULL, self->maxPduSize);
+
+    uint8_t* buffer = reportBuffer->buffer;
+    int bufPos = 0;
+
+    /* encode information report header */
+    bufPos = BerEncoder_encodeTL(0xa3, informationReportSize, buffer, bufPos);
+    bufPos = BerEncoder_encodeTL(0xa0, informationReportContentSize, buffer, bufPos);
+
+    /* encode list of variable access specifications */
+    bufPos = BerEncoder_encodeTL(0xa0, listOfVariableSize, buffer, bufPos);
+
+    bufPos = BerEncoder_encodeTL(0x30, sequenceSize, buffer, bufPos);
+
+    specElement = LinkedList_getNext(variableAccessDeclarations);
+    i = 0;
+
+    while (specElement != NULL) {
+        MmsVariableAccessSpecification* spec = (MmsVariableAccessSpecification*) specElement->data;
+
+        if (spec->domainId != NULL) {
+            bufPos = BerEncoder_encodeTL(0xa0, varSpecSize[i], buffer, bufPos); /* domain-specific */
+            bufPos = BerEncoder_encodeTL(0xa1, varSpecSize[i] - 2, buffer, bufPos);
+            bufPos = BerEncoder_encodeStringWithTag(0x1a, spec->domainId, buffer, bufPos);
+            bufPos = BerEncoder_encodeStringWithTag(0x1a, spec->itemId, buffer, bufPos);
+        }
+        else {
+            bufPos = BerEncoder_encodeTL(0xa0, varSpecSize[i], buffer, bufPos); /* vmd-specific */
+            bufPos = BerEncoder_encodeStringWithTag(0x80, spec->itemId, buffer, bufPos);
+        }
+
+
+        i++;
+        specElement = LinkedList_getNext(specElement);
+    }
+
+    /* encode list of access results (variable values) */
+    bufPos = BerEncoder_encodeTL(0xa0, accessResultSize, buffer, bufPos);
+
+    valueElement = LinkedList_getNext(values);
+
+    while (valueElement != NULL) {
+        MmsValue* value = (MmsValue*) valueElement->data;
+
+        bufPos = mmsServer_encodeAccessResult(value, buffer, bufPos, true);
+
+        valueElement = LinkedList_getNext(valueElement);
+    }
+
+    reportBuffer->size = bufPos;
+
+    IsoConnection_sendMessage(self->isoConnection, reportBuffer, handlerMode);
+
+    ByteBuffer_destroy(reportBuffer);
+}
+
+
+void /* send information report for a named variable list */
+MmsServerConnection_sendInformationReportVMDSpecific(MmsServerConnection* self, char* itemId, LinkedList values,
+        bool handlerMode)
 {
 
     uint32_t variableAccessSpecSize = 0;
@@ -38,19 +207,10 @@ MmsServerConnection_sendInformationReport(MmsServerConnection* self, char* domai
     uint32_t listOfAccessResultSize;
     uint32_t informationReportSize;
 
-    if (domainId != NULL) {
-//        report->variableAccessSpecification.choice.variableListName.present = ObjectName_PR_domainspecific;
-//        report->variableAccessSpecification.choice.variableListName.choice.domainspecific.domainId.size = strlen(domainId);
-//        report->variableAccessSpecification.choice.variableListName.choice.domainspecific.domainId.buf = domainId;
-//        report->variableAccessSpecification.choice.variableListName.choice.domainspecific.itemId.size = strlen(itemId);
-//        report->variableAccessSpecification.choice.variableListName.choice.domainspecific.itemId.buf = itemId;
-    }
-    else {
-        objectNameSize = BerEncoder_determineEncodedStringSize(itemId);
-        variableAccessSpecSize += objectNameSize;
-        variableAccessSpecSize += BerEncoder_determineLengthSize(objectNameSize);
-        variableAccessSpecSize += 1; /* space for tag (a1) */
-    }
+	objectNameSize = BerEncoder_determineEncodedStringSize(itemId);
+	variableAccessSpecSize += objectNameSize;
+	variableAccessSpecSize += BerEncoder_determineLengthSize(objectNameSize);
+	variableAccessSpecSize += 1; /* space for tag (a1) */
 
     int variableCount = LinkedList_size(values);
 
@@ -104,11 +264,9 @@ MmsServerConnection_sendInformationReport(MmsServerConnection* self, char* domai
         value = LinkedList_getNext(value);
     }
 
-    if (DEBUG) printf("sendInfReport: %i encoded\n", bufPos);
-
     reportBuffer->size = bufPos;
 
-    IsoConnection_sendMessage(self->isoConnection, reportBuffer);
+    IsoConnection_sendMessage(self->isoConnection, reportBuffer, false);
 
     ByteBuffer_destroy(reportBuffer);
 }

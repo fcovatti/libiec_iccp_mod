@@ -72,12 +72,9 @@ main(int argc, char** argv)
 
 	MmsConnection con = MmsConnection_create();
 
-	MmsClientError mmsError;
+	MmsError mmsError;
 
-	MmsIndication indication =
-			MmsConnection_connect(con, &mmsError, "localhost", 102);
-
-	if (indication == MMS_OK) {
+	if (MmsConnection_connect(con, &mmsError, "localhost", 102)) {
 	    MmsConnection_setInformationReportHandler(con, informationReportHandler, NULL);
 
 	    /* include data set name in the report */

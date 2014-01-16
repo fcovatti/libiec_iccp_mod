@@ -28,10 +28,10 @@ ByteBuffer*
 ByteBuffer_create(ByteBuffer* self, int maxSize)
 {
 	if (self == NULL) {
-		self = calloc(1, sizeof(ByteBuffer));
+		self = (ByteBuffer*) calloc(1, sizeof(ByteBuffer));
 	}
 
-	self->buffer = calloc(maxSize, sizeof(uint8_t));
+	self->buffer = (uint8_t*) calloc(maxSize, sizeof(uint8_t));
 	self->maxSize = maxSize;
 	self->size = 0;
 

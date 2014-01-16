@@ -55,8 +55,16 @@ public class LogicalNode implements DataModelNode {
 		this.desc = ParserUtils.parseAttribute(lnNode, "desc");
 		this.prefix = ParserUtils.parseAttribute(lnNode, "prefix");
 		
-		if ((this.lnClass == null) || (this.lnType == null) || (this.inst == null))
-			throw new SclParserException("required attribute is missing in logical node.");
+		
+		
+		if (this.lnClass == null)
+			throw new SclParserException(lnNode, "required attribute \"lnClass\" is missing in logical node.");
+		
+		if (this.lnType == null)
+			throw new SclParserException(lnNode, "required attribute \"lnType\" is missing in logical node.");
+		
+		if (this.inst == null)
+			throw new SclParserException(lnNode, "required attribute \"inst\" is missing in logical node.");
 		
 		//instantiate DataObjects
 		this.sclType = typeDeclarations.lookupType(this.lnType);
@@ -91,6 +99,7 @@ public class LogicalNode implements DataModelNode {
 		reportControlBlocks = new LinkedList<ReportControlBlock>();
 		
 		List<Node> reportControlNodes = ParserUtils.getChildNodesWithTag(lnNode, "ReportControl");
+		
 		for (Node reportControlNode : reportControlNodes) {
 			reportControlBlocks.add(new ReportControlBlock(reportControlNode));
 		}

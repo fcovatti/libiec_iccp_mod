@@ -25,6 +25,7 @@
 
 #include "stack_config.h"
 #include "byte_stream.h"
+#include "buffer_chain.h"
 #include "cotp.h"
 #include "iso_session.h"
 #include "iso_presentation.h"
@@ -32,6 +33,16 @@
 #include "iso_server.h"
 #include "socket.h"
 #include "thread.h"
+
+#include "iso_server_private.h"
+
+#ifndef DEBUG_ISO_SERVER
+#ifdef DEBUG
+#define DEBUG_ISO_SERVER 1
+#else
+#define DEBUG_ISO_SERVER 0
+#endif /*DEBUG */
+#endif /* DEBUG_ISO_SERVER */
 
 #define RECEIVE_BUF_SIZE MMS_MAXIMUM_PDU_SIZE + 100
 #define SEND_BUF_SIZE MMS_MAXIMUM_PDU_SIZE + 100
@@ -42,7 +53,6 @@
 struct sIsoConnection {
     uint8_t* receive_buf;
     uint8_t* send_buf_1;
-    uint8_t* send_buf_2;
     MessageReceivedHandler msgRcvdHandler;
     IsoServer isoServer;
     void* msgRcvdHandlerParameter;
@@ -60,27 +70,25 @@ struct sIsoConnection {
 static void
 handleTcpConnection(IsoConnection self)
 {
+    if (DEBUG_ISO_SERVER)
+           printf("ISO_SERVER: connection %p started\n", self);
+
     CotpIndication cotpIndication;
 
     IsoSessionIndication sIndication;
-
-    IsoPresentationIndication pIndication;
 
     AcseIndication aIndication;
     AcseConnection acseConnection;
 
     ByteBuffer receiveBuffer;
 
-    ByteBuffer responseBuffer1;
-    ByteBuffer responseBuffer2;
-
-    self->cotpConnection = calloc(1, sizeof(CotpConnection));
+    self->cotpConnection = (CotpConnection*) calloc(1, sizeof(CotpConnection));
     CotpConnection_init(self->cotpConnection, self->socket, &receiveBuffer);
 
-    self->session = calloc(1, sizeof(IsoSession));
+    self->session = (IsoSession*) calloc(1, sizeof(IsoSession));
     IsoSession_init(self->session);
 
-    self->presentation = calloc(1, sizeof(IsoPresentation));
+    self->presentation = (IsoPresentation*) calloc(1, sizeof(IsoPresentation));
     IsoPresentation_init(self->presentation);
 
     AcseConnection_init(&acseConnection);
@@ -90,20 +98,18 @@ handleTcpConnection(IsoConnection self)
     while (self->msgRcvdHandlerParameter == NULL )
         Thread_sleep(1);
 
-    printf("IsoConnection: state = RUNNING. Start to handle connection for client %s\n",
-            self->clientAddress);
+    if (DEBUG_ISO_SERVER)
+        printf("ISO_SERVER: IsoConnection: Start to handle connection for client %s\n", self->clientAddress);
 
     while (self->state == ISO_CON_STATE_RUNNING) {
         ByteBuffer_wrap(&receiveBuffer, self->receive_buf, 0, RECEIVE_BUF_SIZE);
-        ByteBuffer_wrap(&responseBuffer1, self->send_buf_1, 0, SEND_BUF_SIZE);
-        ByteBuffer_wrap(&responseBuffer2, self->send_buf_2, 0, SEND_BUF_SIZE);
 
         cotpIndication = CotpConnection_parseIncomingMessage(self->cotpConnection);
 
         switch (cotpIndication) {
         case CONNECT_INDICATION:
-            if (DEBUG)
-                printf("COTP connection indication\n");
+            if (DEBUG_ISO_SERVER)
+                printf("ISO_SERVER: COTP connection indication\n");
 
             Semaphore_wait(self->conMutex);
 
@@ -113,150 +119,175 @@ handleTcpConnection(IsoConnection self)
 
             break;
         case DATA_INDICATION:
-            if (DEBUG)
-                printf("COTP data indication\n");
+			{
+				if (DEBUG_ISO_SERVER)
+					printf("ISO_SERVER: COTP data indication\n");
 
-            ByteBuffer* cotpPayload = CotpConnection_getPayload(self->cotpConnection);
+				ByteBuffer* cotpPayload = CotpConnection_getPayload(self->cotpConnection);
 
-            sIndication = IsoSession_parseMessage(self->session, cotpPayload);
+				sIndication = IsoSession_parseMessage(self->session, cotpPayload);
 
-            ByteBuffer* sessionUserData = IsoSession_getUserData(self->session);
+				ByteBuffer* sessionUserData = IsoSession_getUserData(self->session);
 
-            switch (sIndication) {
-            case SESSION_CONNECT:
-                if (DEBUG)
-                    printf("iso_connection: session connect indication\n");
+				switch (sIndication) {
+				case SESSION_CONNECT:
+					if (DEBUG_ISO_SERVER)
+						printf("ISO_SERVER: iso_connection: session connect indication\n");
 
-                pIndication = IsoPresentation_parseConnect(self->presentation, sessionUserData);
+					if (IsoPresentation_parseConnect(self->presentation, sessionUserData)) {
+						if (DEBUG_ISO_SERVER)
+							printf("ISO_SERVER: iso_connection: presentation ok\n");
 
-                if (pIndication == PRESENTATION_OK) {
-                    if (DEBUG)
-                        printf("iso_connection: presentation ok\n");
+						ByteBuffer* acseBuffer = &(self->presentation->nextPayload);
 
-                    ByteBuffer* acseBuffer = &(self->presentation->nextPayload);
+						aIndication = AcseConnection_parseMessage(&acseConnection, acseBuffer);
 
-                    aIndication = AcseConnection_parseMessage(&acseConnection, acseBuffer);
+						if (aIndication == ACSE_ASSOCIATE) {
 
-                    if (aIndication == ACSE_ASSOCIATE) {
-                        if (DEBUG)
-                            printf("cotp_server: acse associate\n");
+							Semaphore_wait(self->conMutex);
 
-                        ByteBuffer mmsRequest;
+		                    if (DEBUG_ISO_SERVER)
+                                printf("ISO_SERVER: cotp_server: acse associate\n");
 
-                        ByteBuffer_wrap(&mmsRequest, acseConnection.userDataBuffer,
-                                acseConnection.userDataBufferSize, acseConnection.userDataBufferSize);
+							ByteBuffer mmsRequest;
 
-                        Semaphore_wait(self->conMutex);
+							ByteBuffer_wrap(&mmsRequest, acseConnection.userDataBuffer,
+									acseConnection.userDataBufferSize, acseConnection.userDataBufferSize);
+							ByteBuffer mmsResponseBuffer; /* new */
 
-                        self->msgRcvdHandler(self->msgRcvdHandlerParameter,
-                                &mmsRequest, &responseBuffer1);
+							ByteBuffer_wrap(&mmsResponseBuffer, self->send_buf_1, 0, SEND_BUF_SIZE);
 
-                        if (responseBuffer1.size > 0) {
-                            if (DEBUG)
-                                printf("iso_connection: application payload size: %i\n",
-                                        responseBuffer1.size);
+							self->msgRcvdHandler(self->msgRcvdHandlerParameter,
+									&mmsRequest, &mmsResponseBuffer);
 
-                            AcseConnection_createAssociateResponseMessage(&acseConnection,
-                            		ACSE_RESULT_ACCEPT, &responseBuffer2, &responseBuffer1);
+							BufferChain mmsBufferPart = (BufferChain) alloca(sizeof(struct sBufferChain));
 
-                            responseBuffer1.size = 0;
+							BufferChain_init(mmsBufferPart, mmsResponseBuffer.size, mmsResponseBuffer.size, NULL, self->send_buf_1);
 
-                            IsoPresentation_createCpaMessage(self->presentation, &responseBuffer1,
-                                    &responseBuffer2);
+							if (mmsResponseBuffer.size > 0) {
+								if (DEBUG_ISO_SERVER)
+									printf("iso_connection: application payload size: %i\n",
+											mmsResponseBuffer.size);
 
-                            responseBuffer2.size = 0;
+								BufferChain acseBufferPart = (BufferChain) alloca(sizeof(struct sBufferChain));
+								acseBufferPart->buffer = self->send_buf_1 + mmsBufferPart->length;
+								acseBufferPart->partMaxLength = SEND_BUF_SIZE - mmsBufferPart->length;
 
-                            IsoSession_createAcceptSpdu(self->session, &responseBuffer2,
-                                    responseBuffer1.size);
+								AcseConnection_createAssociateResponseMessageBC(&acseConnection,
+                            			ACSE_RESULT_ACCEPT, acseBufferPart, mmsBufferPart);
 
-                            ByteBuffer_append(&responseBuffer2, responseBuffer1.buffer,
-                                    responseBuffer1.size);
+								BufferChain presentationBufferPart = (BufferChain) alloca(sizeof(struct sBufferChain));
+								presentationBufferPart->buffer = self->send_buf_1 + acseBufferPart->length;
+								presentationBufferPart->partMaxLength = SEND_BUF_SIZE - acseBufferPart->length;
 
-                            CotpConnection_sendDataMessage(self->cotpConnection, &responseBuffer2);
-                        }
-                        else {
-                            if (DEBUG)
-                                printf("iso_connection: association error. No response from application!\n");
-                        }
+								IsoPresentation_createCpaMessageBC(self->presentation, presentationBufferPart,
+										acseBufferPart);
 
-                        Semaphore_post(self->conMutex);
-                    }
-                    else {
-                        if (DEBUG)
-                            printf("iso_connection: acse association failed\n");
-                        self->state = ISO_CON_STATE_STOPPED;
-                    }
+								BufferChain sessionBufferPart = (BufferChain) alloca(sizeof(struct sBufferChain));
+								sessionBufferPart->buffer = self->send_buf_1 + presentationBufferPart->length;
+								sessionBufferPart->partMaxLength = SEND_BUF_SIZE - presentationBufferPart->length;
 
-                }
-                break;
-            case SESSION_DATA:
-                if (DEBUG)
-                    printf("iso_connection: session data indication\n");
+								IsoSession_createAcceptSpduBC(self->session, sessionBufferPart, presentationBufferPart);
 
-                pIndication = IsoPresentation_parseUserData(self->presentation, sessionUserData);
+								CotpConnection_sendDataMessageBC(self->cotpConnection, sessionBufferPart);
+							}
+							else {
+								if (DEBUG_ISO_SERVER)
+									printf("ISO_SERVER: iso_connection: association error. No response from application!\n");
+							}
 
-                if (pIndication == PRESENTATION_ERROR) {
-                    if (DEBUG)
-                        printf("cotp_server: presentation error\n");
-                    self->state = ISO_CON_STATE_STOPPED;
-                    break;
-                }
+							Semaphore_post(self->conMutex);
+						}
+						else {
+							if (DEBUG_ISO_SERVER)
+								printf("ISO_SERVER: iso_connection: acse association failed\n");
+							self->state = ISO_CON_STATE_STOPPED;
+						}
 
-                if (self->presentation->nextContextId == self->presentation->mmsContextId) {
-                    if (DEBUG)
-                        printf("iso_connection: mms message\n");
+					}
+					break;
+				case SESSION_DATA:
+					if (DEBUG_ISO_SERVER)
+						printf("ISO_SERVER: iso_connection: session data indication\n");
 
-                    ByteBuffer* mmsRequest = &(self->presentation->nextPayload);
+					if (!IsoPresentation_parseUserData(self->presentation, sessionUserData)) {
+						if (DEBUG_ISO_SERVER)
+							printf("ISO_SERVER: cotp_server: presentation error\n");
+						self->state = ISO_CON_STATE_STOPPED;
+						break;
+					}
 
-                    Semaphore_wait(self->conMutex);
+					if (self->presentation->nextContextId == self->presentation->mmsContextId) {
+						if (DEBUG_ISO_SERVER)
+							printf("ISO_SERVER: iso_connection: mms message\n");
 
-                    self->msgRcvdHandler(self->msgRcvdHandlerParameter,
-                            mmsRequest, &responseBuffer1);
+						ByteBuffer* mmsRequest = &(self->presentation->nextPayload);
 
-                    IsoPresentation_createUserData(self->presentation,
-                            &responseBuffer2, &responseBuffer1);
+						ByteBuffer mmsResponseBuffer;
 
-                    responseBuffer1.size = 0;
+						Semaphore_wait(self->conMutex);
 
-                    IsoSession_createDataSpdu(self->session, &responseBuffer1);
+                        ByteBuffer_wrap(&mmsResponseBuffer, self->send_buf_1, 0, SEND_BUF_SIZE);
 
-                    ByteBuffer_append(&responseBuffer1, responseBuffer2.buffer,
-                            responseBuffer2.size);
+						self->msgRcvdHandler(self->msgRcvdHandlerParameter,
+								mmsRequest, &mmsResponseBuffer);
 
-                    CotpConnection_sendDataMessage(self->cotpConnection, &responseBuffer1);
+						if (mmsResponseBuffer.size > 0) {
 
-                    Semaphore_post(self->conMutex);
-                }
-                else {
-                	if (DEBUG)
-                		printf("iso_connection: unknown presentation layer context!");
-                }
+						    BufferChain mmsBufferPart = (BufferChain) alloca(sizeof(struct sBufferChain));
 
-                break;
-            case SESSION_ERROR:
-                self->state = ISO_CON_STATE_STOPPED;
-                break;
-            }
+                            BufferChain_init(mmsBufferPart, mmsResponseBuffer.size,
+                                    mmsResponseBuffer.size, NULL, self->send_buf_1);
+
+                            BufferChain presentationBufferPart = (BufferChain) alloca(sizeof(struct sBufferChain));
+                            presentationBufferPart->buffer = self->send_buf_1 + mmsBufferPart->length;
+                            presentationBufferPart->partMaxLength = SEND_BUF_SIZE - mmsBufferPart->length;
+
+							IsoPresentation_createUserDataBC(self->presentation,
+									presentationBufferPart, mmsBufferPart);
+
+						    BufferChain sessionBufferPart = (BufferChain) alloca(sizeof(struct sBufferChain));
+                            sessionBufferPart->buffer = self->send_buf_1 + presentationBufferPart->length;
+                            sessionBufferPart->partMaxLength = SEND_BUF_SIZE - presentationBufferPart->length;
+
+							IsoSession_createDataSpduBC(self->session, sessionBufferPart, presentationBufferPart);
+
+							CotpConnection_sendDataMessageBC(self->cotpConnection, sessionBufferPart);
+						}
+
+						Semaphore_post(self->conMutex);
+					}
+					else {
+                		if (DEBUG_ISO_SERVER)
+                			printf("ISO_SERVER: iso_connection: unknown presentation layer context!");
+					}
+
+					break;
+				case SESSION_ERROR:
+					self->state = ISO_CON_STATE_STOPPED;
+					break;
+				}
+			}
             break;
         case ERROR:
-            if (DEBUG)
-                printf("COTP protocol error\n");
+            if (DEBUG_ISO_SERVER)
+                printf("ISO_SERVER: Connection closed\n");
             self->state = ISO_CON_STATE_STOPPED;
             break;
         default:
-            if (DEBUG)
-                printf("COTP Unknown Indication: %i\n", cotpIndication);
+            if (DEBUG_ISO_SERVER)
+                printf("ISO_SERVER: COTP Unknown Indication: %i\n", cotpIndication);
             self->state = ISO_CON_STATE_STOPPED;
             break;
         }
     }
 
-    Socket_destroy(self->socket);
-
-    //if (DEBUG)
-    printf("IsoConnection: connection closed!\n");
+    //Socket_destroy(self->socket);
 
     IsoServer_closeConnection(self->isoServer, self);
+
+    if (self->socket != NULL)
+        Socket_destroy(self->socket);
 
     free(self->session);
     free(self->presentation);
@@ -270,31 +301,37 @@ handleTcpConnection(IsoConnection self)
 
 	free(self->receive_buf);
 	free(self->send_buf_1);
-	free(self->send_buf_2);
 	free(self->clientAddress);
+
+	IsoServer isoServer = self->isoServer;
+
 	free(self);
+
+    if (DEBUG_ISO_SERVER)
+           printf("ISO_SERVER: connection %p closed\n", self);
+
+    private_IsoServer_decreaseConnectionCounter(isoServer);
 }
 
 IsoConnection
 IsoConnection_create(Socket socket, IsoServer isoServer)
 {
-	IsoConnection self = calloc(1, sizeof(struct sIsoConnection));
+	IsoConnection self = (IsoConnection) calloc(1, sizeof(struct sIsoConnection));
 	self->socket = socket;
-	self->receive_buf = malloc(RECEIVE_BUF_SIZE);
-	self->send_buf_1 = malloc(SEND_BUF_SIZE);
-	self->send_buf_2 = malloc(SEND_BUF_SIZE);
+	self->receive_buf = (uint8_t*) malloc(RECEIVE_BUF_SIZE); // TODO adjust buffer sizes
+	self->send_buf_1 = (uint8_t*) malloc(SEND_BUF_SIZE);
 	self->msgRcvdHandler = NULL;
 	self->msgRcvdHandlerParameter = NULL;
 	self->isoServer = isoServer;
 	self->state = ISO_CON_STATE_RUNNING;
 	self->clientAddress = Socket_getPeerAddress(self->socket);
 
-	self->thread = Thread_create(handleTcpConnection, self, true);
+	self->thread = Thread_create((ThreadExecutionFunction) handleTcpConnection, self, true);
 	self->conMutex = Semaphore_create(1);
 
 	Thread_start(self->thread);
 
-	if (DEBUG) printf("new iso connection thread started\n");
+	if (DEBUG_ISO_SERVER) printf("ISO_SERVER: new iso connection thread started\n");
 
 	return self;
 }
@@ -307,34 +344,60 @@ IsoConnection_getPeerAddress(IsoConnection self)
 
 
 void
-IsoConnection_sendMessage(IsoConnection self, ByteBuffer* message)
+IsoConnection_sendMessage(IsoConnection self, ByteBuffer* message, bool handlerMode)
 {
-    Semaphore_wait(self->conMutex);
+    if (!handlerMode)
+        Semaphore_wait(self->conMutex);
 
-	ByteBuffer presWriteBuffer;
-	ByteBuffer sessionWriteBuffer;
+    //TODO only try to send if connection is alive!
 
-	ByteBuffer_wrap(&presWriteBuffer, self->send_buf_1, 0, SEND_BUF_SIZE);
-	ByteBuffer_wrap(&sessionWriteBuffer, self->send_buf_2, 0, SEND_BUF_SIZE);
+    //TODO allocate buffer chain elements from stack
 
-	IsoPresentation_createUserData(self->presentation,
-								&presWriteBuffer, message);
+	BufferChain payloadBuffer = (BufferChain) calloc(1, sizeof(struct sBufferChain));
+	payloadBuffer->length = message->size;
+	payloadBuffer->partLength = message->size;
+	payloadBuffer->partMaxLength = message->size;
+	payloadBuffer->buffer = message->buffer;
+	payloadBuffer->nextPart = NULL;
 
-	IsoSession_createDataSpdu(self->session, &sessionWriteBuffer);
+	BufferChain presentationBuffer = (BufferChain) calloc(1, sizeof(struct sBufferChain));
+	presentationBuffer->buffer = self->send_buf_1;
+	presentationBuffer->partMaxLength = SEND_BUF_SIZE;
 
-	ByteBuffer_append(&sessionWriteBuffer, presWriteBuffer.buffer,
-								presWriteBuffer.size);
+	IsoPresentation_createUserDataBC(self->presentation,
+								presentationBuffer, payloadBuffer);
 
-	CotpConnection_sendDataMessage(self->cotpConnection, &sessionWriteBuffer);
+	BufferChain sessionBuffer = (BufferChain) calloc(1, sizeof(struct sBufferChain));
+	sessionBuffer->buffer = self->send_buf_1 + presentationBuffer->partLength;
 
-	Semaphore_post(self->conMutex);
+	IsoSession_createDataSpduBC(self->session, sessionBuffer, presentationBuffer);
+
+	CotpIndication indication;
+
+	indication = CotpConnection_sendDataMessageBC(self->cotpConnection, sessionBuffer);
+
+	if (DEBUG_ISO_SERVER) {
+        if (indication != OK)
+            printf("ISO_SERVER: IsoConnection_sendMessage failed!\n");
+        else
+            printf("ISO_SERVER: IsoConnection_sendMessage success!\n");
+	}
+
+	BufferChain_destroy(sessionBuffer);
+
+	if (!handlerMode)
+	    Semaphore_post(self->conMutex);
 }
 
 void
 IsoConnection_close(IsoConnection self)
 {
 	if (self->state != ISO_CON_STATE_STOPPED) {
+	    Socket socket = self->socket;
 	    self->state = ISO_CON_STATE_STOPPED;
+	    self->socket = NULL;
+
+	    Socket_destroy(socket);
 	}
 }
 

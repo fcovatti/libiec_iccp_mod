@@ -39,7 +39,7 @@
 struct sMmsDomain {
 	char* domainName;
 	int namedVariablesCount;
-	MmsTypeSpecification** namedVariables;
+	MmsVariableSpecification** namedVariables;
 	LinkedList /*<MmsNamedVariableList>*/ namedVariableLists;
 };
 
@@ -113,7 +113,7 @@ MmsDomain_createNamedVariableListValues(MmsDomain* self, char* variableListName)
  *
  * \return MmsTypeSpecification instance of the named variable
  */
-MmsTypeSpecification*
+MmsVariableSpecification*
 MmsDomain_getNamedVariable(MmsDomain* domain, char* nameId);
 
 /**@}*/

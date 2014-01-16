@@ -81,4 +81,41 @@ MmsMapping_addObservedAttribute(MmsMapping* self, DataAttribute* dataAttribute,
 char*
 MmsMapping_getNextNameElement(char* name);
 
+void /* Create PHYCOMADDR ACSI type instance */
+MmsMapping_createPhyComAddrStructure(MmsVariableSpecification* namedVariable);
+
+ControlObject*
+MmsMapping_getControlObject(MmsMapping* self, MmsDomain* domain, char* lnName, char* coName);
+
+MmsNamedVariableList
+MmsMapping_getDomainSpecificVariableList(MmsMapping* self, char* variableListReference);
+
+DataSet*
+MmsMapping_getDomainSpecificDataSet(MmsMapping* self, char* dataSetName);
+
+void
+MmsMapping_freeDynamicallyCreatedDataSet(DataSet* dataSet);
+
+MmsVariableAccessSpecification*
+MmsMapping_ObjectReferenceToVariableAccessSpec(char* objectReference);
+
+char*
+MmsMapping_varAccessSpecToObjectReference(MmsVariableAccessSpecification* varAccessSpec);
+
+void
+MmsMapping_setIedServer(MmsMapping* self, IedServer iedServer);
+
+void
+MmsMapping_setConnectionIndicationHandler(MmsMapping* self, IedConnectionIndicationHandler handler, void* parameter);
+
+MmsDataAccessError
+Control_writeAccessControlObject(MmsMapping* self, MmsDomain* domain, char* variableIdOrig,
+                         MmsValue* value, MmsServerConnection* connection);
+
+ControlObject*
+Control_lookupControlObject(MmsMapping* self, MmsDomain* domain, char* lnName, char* objectName);
+
+void
+Control_processControlActions(MmsMapping* self, uint64_t currentTimeInMs);
+
 #endif /* MMS_MAPPING_H_ */

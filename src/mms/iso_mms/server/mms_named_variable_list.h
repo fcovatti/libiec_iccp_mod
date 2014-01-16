@@ -33,22 +33,11 @@
 #include "string_utilities.h"
 #include "mms_common.h"
 
-//typedef struct sMmsDomain MmsDomain;
-//typedef struct sMmsNamedVariableList* MmsNamedVariableList;
-//typedef struct sMmsNamedVariableListEntry* MmsNamedVariableListEntry;
-
 struct sMmsNamedVariableList {
 	bool deletable;
 	char* name;
 	LinkedList listOfVariables;
 };
-
-//struct sMmsNamedVariableListEntry {
-//	MmsDomain* domain;
-//	char* variableName;
-//	//int index;
-//	//char* componentName;
-//};
 
 MmsNamedVariableListEntry
 MmsNamedVariableListEntry_create(MmsAccessSpecifier accessSpecifier);

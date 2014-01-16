@@ -27,6 +27,7 @@
 #include "libiec61850_platform_includes.h"
 #include "byte_buffer.h"
 #include "byte_stream.h"
+#include "buffer_chain.h"
 #include "socket.h"
 
 typedef struct {
@@ -39,10 +40,10 @@ typedef struct {
     int state;
     int srcRef;
     int dstRef;
-    int class;
+    int protocolClass;
     Socket socket;
     CotpOptions options;
-    uint8_t eot;
+    bool isLastDataUnit;
     ByteBuffer* payload;
     ByteBuffer* writeBuffer;
     ByteStream stream;
@@ -78,6 +79,9 @@ CotpConnection_sendConnectionResponseMessage(CotpConnection* self);
 
 CotpIndication
 CotpConnection_sendDataMessage(CotpConnection* self, ByteBuffer* payload);
+
+CotpIndication
+CotpConnection_sendDataMessageBC(CotpConnection* self, BufferChain payload);
 
 ByteBuffer*
 CotpConnection_getPayload(CotpConnection* self);

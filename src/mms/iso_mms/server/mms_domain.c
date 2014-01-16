@@ -22,9 +22,10 @@
  */
 
 #include "mms_device_model.h"
+#include "mms_server_internal.h"
 
-static MmsTypeSpecification*
-getNamedVariableRecursive(MmsTypeSpecification* variable, char* nameId)
+static MmsVariableSpecification*
+getNamedVariableRecursive(MmsVariableSpecification* variable, char* nameId)
 {
 	char* separator = strchr(nameId, '$');
 
@@ -45,7 +46,7 @@ getNamedVariableRecursive(MmsTypeSpecification* variable, char* nameId)
 		return NULL;
 	}
 	else {
-		MmsTypeSpecification* namedVariable = NULL;
+		MmsVariableSpecification* namedVariable = NULL;
 		i = 0;
 
 		for (i = 0; i < variable->typeSpec.structure.elementCount; i++) {
@@ -76,7 +77,7 @@ getNamedVariableRecursive(MmsTypeSpecification* variable, char* nameId)
 }
 
 static void
-freeNamedVariables(MmsTypeSpecification** variables, int variablesCount)
+freeNamedVariables(MmsVariableSpecification** variables, int variablesCount)
 {
 	int i;
 	for (i = 0; i < variablesCount; i++) {
@@ -98,7 +99,7 @@ freeNamedVariables(MmsTypeSpecification** variables, int variablesCount)
 MmsDomain*
 MmsDomain_create(char* domainName)
 {
-	MmsDomain* self = calloc(1, sizeof(MmsDomain));
+	MmsDomain* self = (MmsDomain*) calloc(1, sizeof(MmsDomain));
 
 	self->domainName = copyString(domainName);
 	self->namedVariableLists = LinkedList_create();
@@ -118,7 +119,7 @@ MmsDomain_destroy(MmsDomain* self)
 		free(self->namedVariables);
 	}
 
-	LinkedList_destroyDeep(self->namedVariableLists, MmsNamedVariableList_destroy);
+	LinkedList_destroyDeep(self->namedVariableLists, (LinkedListValueDeleteFunction) MmsNamedVariableList_destroy);
 
 	free(self);
 }
@@ -172,7 +173,7 @@ MmsDomain_getNamedVariableLists(MmsDomain* self)
 	return self->namedVariableLists;
 }
 
-MmsTypeSpecification*
+MmsVariableSpecification*
 MmsDomain_getNamedVariable(MmsDomain* self, char* nameId)
 {
 	if (self->namedVariables != NULL) {
@@ -192,7 +193,7 @@ MmsDomain_getNamedVariable(MmsDomain* self, char* nameId)
 			return NULL;
 		}
 		else {
-			MmsTypeSpecification* namedVariable = NULL;
+			MmsVariableSpecification* namedVariable = NULL;
 
 			for (i = 0; i < self->namedVariablesCount; i++) {
 

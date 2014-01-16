@@ -28,7 +28,7 @@
 MmsNamedVariableListEntry
 MmsNamedVariableListEntry_create(MmsAccessSpecifier accessSpecifier)
 {
-	MmsNamedVariableListEntry listEntry = malloc(sizeof(MmsAccessSpecifier));
+	MmsNamedVariableListEntry listEntry = (MmsNamedVariableListEntry) malloc(sizeof(MmsAccessSpecifier));
 
 	listEntry->domain = accessSpecifier.domain;
 	listEntry->variableName = copyString(accessSpecifier.variableName);
@@ -64,7 +64,7 @@ MmsNamedVariableListEntry_getVariableName(MmsNamedVariableListEntry self) {
 MmsNamedVariableList
 MmsNamedVariableList_create(char* name, bool deletable)
 {
-	MmsNamedVariableList self = malloc(sizeof(struct sMmsNamedVariableList));
+	MmsNamedVariableList self = (MmsNamedVariableList) malloc(sizeof(struct sMmsNamedVariableList));
 
 	self->deletable = deletable;
 	self->name = copyString(name);

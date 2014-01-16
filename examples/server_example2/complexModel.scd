@@ -18,11 +18,11 @@
         <LDevice inst="Inverter">
           <LN0 lnClass="LLN0" lnType="LLN02" inst="">
             <DataSet name="dataset1" desc="">
-			  <FCDA ldInst="ied1Inverter" lnClass="LLN0" fc="ST" doName="Mod" daName="q" />
-			  <FCDA ldInst="ied1Battery" lnClass="LLN0" fc="ST" doName="Mod" daName="q" />
-              <FCDA ldInst="ied1Inverter" lnClass="MMXU" fc="ST" lnInst="1" doName="Mod" daName="q" />
-              <FCDA ldInst="ied1Inverter" lnClass="MMXU" fc="CF" lnInst="1" doName="Mod" daName="ctlModel" />
-              <FCDA ldInst="ied1Inverter" lnClass="MMXU" fc="MX" lnInst="1" doName="TotW" daName="mag" />
+			  <FCDA ldInst="Inverter" lnClass="LLN0" fc="ST" doName="Mod" daName="q" />
+			  <FCDA ldInst="Battery" lnClass="LLN0" fc="ST" doName="Mod" daName="q" />
+              <FCDA ldInst="Inverter" lnClass="MMXU" fc="ST" lnInst="1" doName="Mod" daName="q" />
+              <FCDA ldInst="Inverter" lnClass="MMXU" fc="CF" lnInst="1" doName="Mod" daName="ctlModel" />
+              <FCDA ldInst="Inverter" lnClass="MMXU" fc="MX" lnInst="1" doName="TotW" daName="mag" />
             </DataSet>
             
             <ReportControl name="rcb1" confRev="0" datSet="dataset1" rptID="ID" intgPd="0" bufTime="0">

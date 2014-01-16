@@ -57,7 +57,7 @@ Thread
 Thread_create(ThreadExecutionFunction function, void* parameter, bool autodestroy)
 {
 	DWORD threadId;
-	Thread thread = malloc(sizeof(struct sThread));
+	Thread thread = (Thread) malloc(sizeof(struct sThread));
 
 	thread->parameter = parameter;
 	thread->function = function;

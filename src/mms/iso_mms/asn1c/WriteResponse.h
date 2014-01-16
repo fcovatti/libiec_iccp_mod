@@ -29,9 +29,7 @@ typedef enum WriteResponse__Member_PR {
 	WriteResponse__Member_PR_success
 } WriteResponse__Member_PR;
 
-/* WriteResponse */
-typedef struct WriteResponse {
-	A_SEQUENCE_OF(struct WriteResponse__Member {
+struct WriteResponse__Member {
 		WriteResponse__Member_PR present;
 		union WriteResponse__Member_u {
 			DataAccessError_t	 failure;
@@ -40,7 +38,11 @@ typedef struct WriteResponse {
 		
 		/* Context for parsing across buffer boundaries */
 		asn_struct_ctx_t _asn_ctx;
-	} ) list;
+	};
+
+/* WriteResponse */
+typedef struct WriteResponse {
+	A_SEQUENCE_OF(struct WriteResponse__Member) list;
 	
 	/* Context for parsing across buffer boundaries */
 	asn_struct_ctx_t _asn_ctx;

@@ -46,9 +46,9 @@ mmsClient_getInvokeId(ConfirmedResponsePdu_t* confirmedResponse)
 
 
 MmsPdu_t*
-mmsClient_createConfirmedRequestPdu(long invokeId)
+mmsClient_createConfirmedRequestPdu(uint32_t invokeId)
 {
-	MmsPdu_t* mmsPdu = calloc(1, sizeof(MmsPdu_t));
+	MmsPdu_t* mmsPdu = (MmsPdu_t*) calloc(1, sizeof(MmsPdu_t));
 	mmsPdu->present = MmsPdu_PR_confirmedRequestPdu;
 
 	asn_long2INTEGER(&(mmsPdu->choice.confirmedRequestPdu.invokeID), invokeId);
@@ -57,10 +57,10 @@ mmsClient_createConfirmedRequestPdu(long invokeId)
 }
 
 MmsPdu_t*
-mmsClient_createUnconfirmedPdu(void)
+mmsClient_createUnconfirmedResponsePdu(void)
 {
-	MmsPdu_t* mmsPdu = calloc(1, sizeof(MmsPdu_t));
-	
+	MmsPdu_t* mmsPdu = (MmsPdu_t*) calloc(1, sizeof(MmsPdu_t));
+
 	mmsPdu->present = MmsPdu_PR_unconfirmedPDU;
 
 	return mmsPdu;

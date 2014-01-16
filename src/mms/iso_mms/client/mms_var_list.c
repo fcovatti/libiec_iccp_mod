@@ -43,6 +43,6 @@ createDefineNamedVariableListMsg(long invokeId, char* listName)
 
 	request = &(mmsPdu->choice.confirmedRequestPdu.confirmedServiceRequest.choice.defineNamedVariableList);
 
-	request->variableListName.choice.aaspecific.buf = copyString(listName);
+	request->variableListName.choice.aaspecific.buf = (uint8_t*) copyString(listName);
 	request->variableListName.choice.aaspecific.size = strlen(listName);
 }

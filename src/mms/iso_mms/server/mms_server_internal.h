@@ -30,18 +30,14 @@
 #include "mms_common.h"
 #include "mms_server_connection.h"
 #include "mms_device_model.h"
+#include "mms_common_internal.h"
 #include "stack_config.h"
 
 #include "byte_buffer.h"
 #include "string_utilities.h"
 
-typedef enum {
-	MMS_ERROR_TYPE_OK,
-	MMS_ERROR_TYPE_OBJECT_NON_EXISTENT,
-	MMS_ERROR_TYPE_OBJECT_ACCESS_UNSUPPORTED,
-	MMS_ERROR_TYPE_ACCESS_DENIED,
-	MMS_ERROR_TYPE_RESPONSE_EXCEEDS_MAX_PDU_SIZE
-} MmsConfirmedErrorType;
+#include "ber_encoder.h"
+#include "ber_decode.h"
 
 /* write_out function required for ASN.1 encoding */
 int
@@ -57,21 +53,21 @@ void
 mmsServer_handleGetNamedVariableListAttributesRequest(
 		MmsServerConnection* connection,
 		uint8_t* buffer, int bufPos, int maxBufPos,
-		int invokeId,
+		uint32_t invokeId,
 		ByteBuffer* response);
 
 void
 mmsServer_handleReadRequest(
 		MmsServerConnection* connection,
 		uint8_t* buffer, int bufPos, int maxBufPos,
-		int invokeId,
+		uint32_t invokeId,
 		ByteBuffer* response);
 
 MmsPdu_t*
-mmsServer_createConfirmedResponse(int invokeId);
+mmsServer_createConfirmedResponse(uint32_t invokeId);
 
 void
-mmsServer_createConfirmedErrorPdu(int invokeId, ByteBuffer* response, MmsConfirmedErrorType errorType);
+mmsServer_createConfirmedErrorPdu(uint32_t invokeId, ByteBuffer* response, MmsError errorType);
 
 void
 mmsServer_writeConcludeResponsePdu(ByteBuffer* response);
@@ -80,28 +76,28 @@ int
 mmsServer_handleGetVariableAccessAttributesRequest(
 		MmsServerConnection* connection,
 		uint8_t* buffer, int bufPos, int maxBufPos,
-		int invokeId,
+		uint32_t invokeId,
 		ByteBuffer* response);
 
 void
 mmsServer_handleDefineNamedVariableListRequest(
         MmsServerConnection* connection,
         uint8_t* buffer, int bufPos, int maxBufPos,
-        int invokeId,
+        uint32_t invokeId,
         ByteBuffer* response);
 
 void
 mmsServer_handleGetNameListRequest(
 		MmsServerConnection* connection,
 		uint8_t* buffer, int bufPos, int maxBufPos,
-		int invokeId,
+		uint32_t invokeId,
 		ByteBuffer* response);
 
-int /* MmsServiceError */
+void
 mmsServer_handleWriteRequest(
 		MmsServerConnection* connection,
 		uint8_t* buffer, int bufPos, int maxBufPos,
-		int invokeId,
+		uint32_t invokeId,
 		ByteBuffer* response);
 
 int
@@ -116,11 +112,18 @@ mmsServer_getNumberOfElements(AlternateAccess_t* alternateAccess);
 void
 mmsServer_deleteVariableList(LinkedList namedVariableLists, char* variableListName);
 
-MmsValueIndication
+MmsDataAccessError
 mmsServer_setValue(MmsServer self, MmsDomain* domain, char* itemId, MmsValue* value,
         MmsServerConnection* connection);
 
 MmsValue*
-mmsServer_getValue(MmsServer self, MmsDomain* domain, char* itemId);
+mmsServer_getValue(MmsServer self, MmsDomain* domain, char* itemId, MmsServerConnection* connection);
+
+int
+mmsServer_createMmsWriteResponse(MmsServerConnection* connection,
+        int invokeId, ByteBuffer* response, int numberOfItems, MmsDataAccessError* accessResults);
+
+void
+mmsServer_writeMmsRejectPdu(uint32_t* invokeId, int reason, ByteBuffer* response);
 
 #endif /* MMS_SERVER_INTERNAL_H_ */

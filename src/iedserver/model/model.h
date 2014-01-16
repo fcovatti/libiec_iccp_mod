@@ -28,12 +28,41 @@
 #include "mms_value.h"
 #include "iec61850_common.h"
 
+/** \addtogroup server_api_group
+ *  @{
+ */
+
+/**
+ * \brief abstract base type for IEC 61850 data model nodes
+ */
 typedef struct sModelNode ModelNode;
-typedef struct sLogicalNode LogicalNode;
-typedef struct sDataObject DataObject;
+
+/**
+ * \brief IEC 61850 data model element of type data attribute
+ */
 typedef struct sDataAttribute DataAttribute;
+
+/**
+ * \brief IEC 61850 data model element of type data object
+ */
+typedef struct sDataObject DataObject;
+
+/**
+ * \brief IEC 61850 data model element of type logical node
+ */
+typedef struct sLogicalNode LogicalNode;
+
+/**
+ * \brief IEC 61850 data model element of type logical device
+ */
 typedef struct sLogicalDevice LogicalDevice;
+
+/**
+ * \brief Root node of the IEC 61850 data model. This is usually created by the model generator tool (genmodel.jar)
+ */
 typedef struct sIedModel IedModel;
+
+/**@}*/
 
 typedef struct sDataSet DataSet;
 typedef struct sReportControlBlock ReportControlBlock;
@@ -46,6 +75,7 @@ typedef enum eDataAttributeType {
 	INT16,  /* int16_t */
 	INT32,  /* int32_t */
 	INT64,  /* int64_t */
+	INT128, /* no native mapping! */
 	INT8U,  /* uint8_t */
 	INT16U, /* uint16_t */
 	INT24U, /* uint32_t */
@@ -117,11 +147,8 @@ struct sDataObject {
 	ModelNode* sibling;
 	ModelNode* firstChild;
 
-	int observerCount; /* Number of observers currently monitoring this node */
+	int observerCount; /* Number of observers currently monitoring this node TODO remove attribute */
 	int elementCount;  /* > 0 if this is an array */
-
-	//MmsTypeSpecification* typeSpec;
-	//MmsValue* mmsValue;
 };
 
 struct sDataAttribute {
@@ -131,13 +158,12 @@ struct sDataAttribute {
 	ModelNode* sibling;
 	ModelNode* firstChild;
 
-	int observerCount; /* Number of observers currently monitoring this node */
+	int observerCount; /* Number of observers currently monitoring this node TODO remove attribute */
 	int elementCount;  /* > 0 if this is an array */
 
 	FunctionalConstraint fc;
 	DataAttributeType type;
 
-	//MmsTypeSpecification* typeSpec;
 	MmsValue* mmsValue;
 };
 

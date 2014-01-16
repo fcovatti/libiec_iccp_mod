@@ -26,7 +26,7 @@
 MmsDevice*
 MmsDevice_create(char* deviceName)
 {
-	MmsDevice* self = calloc(1, sizeof(MmsDevice));
+	MmsDevice* self = (MmsDevice*) calloc(1, sizeof(MmsDevice));
 	self->deviceName = deviceName;
 
 	return self;

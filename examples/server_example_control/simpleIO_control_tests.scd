@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--This file is generated using Kalkitech SCL Manager IEC61850 Configuration Tool (www.kalkitech.com)-->
 <SCL xmlns="http://www.iec.ch/61850/2003/SCL">
-  <Header id="" nameStructure="IEDName">
+  <Header id="" version="4.0.2" revision="" toolID="" nameStructure="IEDName">
   </Header>
   <Communication>
     <SubNetwork name="subnetwork1" type="8-MMS">
@@ -39,17 +40,6 @@
         <Authentication />
         <LDevice inst="GenericIO">
           <LN0 lnClass="LLN0" lnType="LLN01" inst="">
-          	<DataSet name="Events" desc="Events">
-              <FCDA ldInst="GenericIO" lnClass="GGIO" fc="ST" lnInst="1" doName="SPCSO1" daName="stVal" />
-              <FCDA ldInst="GenericIO" lnClass="GGIO" fc="ST" lnInst="1" doName="SPCSO2" daName="stVal" />
-              <FCDA ldInst="GenericIO" lnClass="GGIO" fc="ST" lnInst="1" doName="SPCSO3" daName="stVal" />
-              <FCDA ldInst="GenericIO" lnClass="GGIO" fc="ST" lnInst="1" doName="SPCSO4" daName="stVal" />
-            </DataSet>
-            <ReportControl name="EventsRCB" confRev="1" datSet="Events" rptID="Events" buffered="false" intgPd="1000" bufTime="50">
-              <TrgOps period="true" />
-              <OptFields seqNum="true" timeStamp="true" dataSet="true" reasonCode="true" entryID="true" configRef="true" />
-              <RptEnabled max="1" />
-            </ReportControl>
             <DOI name="Mod">
               <DAI name="ctlModel">
                 <Val>status-only</Val>
@@ -70,17 +60,37 @@
             </DOI>
             <DOI name="SPCSO2">
               <DAI name="ctlModel">
-                <Val>direct-with-normal-security</Val>
+                <Val>sbo-with-normal-security</Val>
               </DAI>
             </DOI>
             <DOI name="SPCSO3">
               <DAI name="ctlModel">
-                <Val>direct-with-normal-security</Val>
+                <Val>direct-with-enhanced-security</Val>
               </DAI>
             </DOI>
             <DOI name="SPCSO4">
               <DAI name="ctlModel">
+                <Val>sbo-with-enhanced-security</Val>
+              </DAI>
+            </DOI>
+            <DOI name="SPCSO5">
+              <DAI name="ctlModel">
                 <Val>direct-with-normal-security</Val>
+              </DAI>
+            </DOI>
+            <DOI name="SPCSO6">
+              <DAI name="ctlModel">
+                <Val>sbo-with-normal-security</Val>
+              </DAI>
+            </DOI>
+            <DOI name="SPCSO7">
+              <DAI name="ctlModel">
+                <Val>direct-with-enhanced-security</Val>
+              </DAI>
+            </DOI>
+            <DOI name="SPCSO8">
+              <DAI name="ctlModel">
+                <Val>sbo-with-enhanced-security</Val>
               </DAI>
             </DOI>
           </LN>
@@ -101,7 +111,7 @@
       <DO name="Proxy" type="SPS_1_Proxy" />
     </LNodeType>
     <LNodeType id="GGIO1" lnClass="GGIO">
-      <DO name="Mod" type="INC_2_Mod" />
+      <DO name="Mod" type="INC_1_Mod" />
       <DO name="Beh" type="INS_1_Beh" />
       <DO name="Health" type="INS_1_Beh" />
       <DO name="NamPlt" type="LPL_2_NamPlt" />
@@ -109,10 +119,14 @@
       <DO name="AnIn2" type="MV_1_AnIn1" />
       <DO name="AnIn3" type="MV_1_AnIn1" />
       <DO name="AnIn4" type="MV_1_AnIn1" />
-      <DO name="SPCSO1" type="SPC_2_SPCSO1" />
+      <DO name="SPCSO1" type="SPC_1_SPCSO1" />
       <DO name="SPCSO2" type="SPC_1_SPCSO2" />
       <DO name="SPCSO3" type="SPC_1_SPCSO3" />
-      <DO name="SPCSO4" type="SPC_1_SPCSO1" />
+      <DO name="SPCSO4" type="SPC_1_SPCSO4" />
+      <DO name="SPCSO5" type="SPC_1_SPCSO5" />
+      <DO name="SPCSO6" type="SPC_1_SPCSO6" />
+      <DO name="SPCSO7" type="SPC_1_SPCSO7" />
+      <DO name="SPCSO8" type="SPC_1_SPCSO8" />
       <DO name="Ind1" type="SPS_1_Proxy" />
       <DO name="Ind2" type="SPS_1_Proxy" />
       <DO name="Ind3" type="SPS_1_Proxy" />
@@ -143,56 +157,86 @@
       <DA name="q" bType="Quality" fc="ST" qchg="true" />
       <DA name="t" bType="Timestamp" fc="ST" />
     </DOType>
-    <DOType id="LPL_2_NamPlt" cdc="LPL">
-      <DA name="vendor" bType="VisString255" fc="DC" />
-      <DA name="swRev" bType="VisString255" fc="DC" />
-      <DA name="d" bType="VisString255" fc="DC" />
+    <DOType id="SPC_1_SPCSO8" cdc="SPC">
+      <DA name="SBOw" type="SPCOperate_5" bType="Struct" fc="CO" />
+      <DA name="Oper" type="SPCOperate_5" bType="Struct" fc="CO" />
+      <DA name="Cancel" type="SPCCancel_5" bType="Struct" fc="CO" />
+      <DA name="origin" type="Originator_1" bType="Struct" fc="ST" />
+      <DA name="ctlNum" bType="INT8U" fc="ST" />
+      <DA name="stVal" bType="BOOLEAN" fc="ST" dchg="true" />
+      <DA name="q" bType="Quality" fc="ST" qchg="true" />
+      <DA name="t" bType="Timestamp" fc="ST" />
+      <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
+    </DOType>
+    <DOType id="SPC_1_SPCSO7" cdc="SPC">
+      <DA name="Oper" type="SPCOperate_5" bType="Struct" fc="CO" />
+      <DA name="Cancel" type="SPCCancel_5" bType="Struct" fc="CO" />
+      <DA name="stVal" bType="BOOLEAN" fc="ST" dchg="true" />
+      <DA name="q" bType="Quality" fc="ST" qchg="true" />
+      <DA name="t" bType="Timestamp" fc="ST" />
+      <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
+    </DOType>
+    <DOType id="SPC_1_SPCSO3" cdc="SPC">
+      <DA name="Oper" type="SPCOperate_1" bType="Struct" fc="CO" />
+      <DA name="Cancel" type="SPCCancel_1" bType="Struct" fc="CO" />
+      <DA name="stVal" bType="BOOLEAN" fc="ST" dchg="true" />
+      <DA name="q" bType="Quality" fc="ST" qchg="true" />
+      <DA name="t" bType="Timestamp" fc="ST" />
+      <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
     </DOType>
     <DOType id="MV_1_AnIn1" cdc="MV">
       <DA name="mag" type="AnalogueValue_1" bType="Struct" fc="MX" dchg="true" />
       <DA name="q" bType="Quality" fc="MX" qchg="true" />
       <DA name="t" bType="Timestamp" fc="MX" />
     </DOType>
-    <DOType id="SPC_1_SPCSO1" cdc="SPC">
+    <DOType id="SPC_1_SPCSO6" cdc="SPC">
+      <DA name="SBO" bType="VisString64" fc="CO" />
+      <DA name="Oper" type="SPCOperate_5" bType="Struct" fc="CO" />
+      <DA name="Cancel" type="SPCCancel_5" bType="Struct" fc="CO" />
       <DA name="stVal" bType="BOOLEAN" fc="ST" dchg="true" />
-      <DA name="q" bType="Quality" fc="ST" qchg="true" />
-      <DA name="Oper" type="SPCOperate_1" bType="Struct" fc="CO" />
-      <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
-      <DA name="t" bType="Timestamp" fc="ST" />
-    </DOType>
-    <DOType id="INC_2_Mod" cdc="INC">
       <DA name="q" bType="Quality" fc="ST" qchg="true" />
       <DA name="t" bType="Timestamp" fc="ST" />
       <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
     </DOType>
-    <DOType id="SPC_2_SPCSO1" cdc="SPC">
+    <DOType id="SPC_1_SPCSO5" cdc="SPC">
+      <DA name="Oper" type="SPCOperate_5" bType="Struct" fc="CO" />
       <DA name="stVal" bType="BOOLEAN" fc="ST" dchg="true" />
       <DA name="q" bType="Quality" fc="ST" qchg="true" />
-      <DA name="Oper" type="SPCOperate_1" bType="Struct" fc="CO" />
-      <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
       <DA name="t" bType="Timestamp" fc="ST" />
+      <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
+      <DA name="Cancel" type="SPCCancel_1" bType="Struct" fc="CO" />
+    </DOType>
+    <DOType id="SPC_1_SPCSO4" cdc="SPC">
+      <DA name="SBOw" type="SPCOperate_1" bType="Struct" fc="CO" />
+      <DA name="Oper" type="SPCOperate_1" bType="Struct" fc="CO" />
+      <DA name="Cancel" type="SPCCancel_1" bType="Struct" fc="CO" />
+      <DA name="stVal" bType="BOOLEAN" fc="ST" dchg="true" />
+      <DA name="q" bType="Quality" fc="ST" qchg="true" />
+      <DA name="t" bType="Timestamp" fc="ST" />
+      <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
+    </DOType>
+    <DOType id="LPL_2_NamPlt" cdc="LPL">
+      <DA name="vendor" bType="VisString255" fc="DC" />
+      <DA name="swRev" bType="VisString255" fc="DC" />
+      <DA name="d" bType="VisString255" fc="DC" />
     </DOType>
     <DOType id="SPC_1_SPCSO2" cdc="SPC">
+      <DA name="SBO" bType="VisString64" fc="CO" />
+      <DA name="Oper" type="SPCOperate_1" bType="Struct" fc="CO" />
+      <DA name="Cancel" type="SPCCancel_1" bType="Struct" fc="CO" />
       <DA name="stVal" bType="BOOLEAN" fc="ST" dchg="true" />
       <DA name="q" bType="Quality" fc="ST" qchg="true" />
-      <DA name="Oper" type="SPCOperate_1" bType="Struct" fc="CO" />
-      <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
       <DA name="t" bType="Timestamp" fc="ST" />
+      <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
+      <DA name="sboClass" type="SboClasses" bType="Enum" fc="CF" />
     </DOType>
-    <DOType id="SPC_1_SPCSO3" cdc="SPC">
+    <DOType id="SPC_1_SPCSO1" cdc="SPC">
+      <DA name="Oper" type="SPCOperate_1" bType="Struct" fc="CO" />
       <DA name="stVal" bType="BOOLEAN" fc="ST" dchg="true" />
       <DA name="q" bType="Quality" fc="ST" qchg="true" />
-      <DA name="Oper" type="SPCOperate_1" bType="Struct" fc="CO" />
-      <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
       <DA name="t" bType="Timestamp" fc="ST" />
+      <DA name="ctlModel" type="CtlModels" bType="Enum" fc="CF" />
     </DOType>
-    <DAType id="AnalogueValue_1">
-      <BDA name="f" bType="FLOAT32" />
-    </DAType>
-    <DAType id="Originator_1">
-      <BDA name="orCat" type="OrCat" bType="Enum" />
-      <BDA name="orIdent" bType="Octet64" />
-    </DAType>
     <DAType id="SPCOperate_1">
       <BDA name="ctlVal" bType="BOOLEAN" />
       <BDA name="origin" type="Originator_1" bType="Struct" />
@@ -201,12 +245,47 @@
       <BDA name="Test" bType="BOOLEAN" />
       <BDA name="Check" bType="Check" />
     </DAType>
+    <DAType id="Originator_1">
+      <BDA name="orCat" type="OrCat" bType="Enum" />
+      <BDA name="orIdent" bType="Octet64" />
+    </DAType>
+    <DAType id="SPCOperate_5">
+      <BDA name="ctlVal" bType="BOOLEAN" />
+      <BDA name="operTm" bType="Timestamp" />
+      <BDA name="origin" type="Originator_1" bType="Struct" />
+      <BDA name="ctlNum" bType="INT8U" />
+      <BDA name="T" bType="Timestamp" />
+      <BDA name="Test" bType="BOOLEAN" />
+      <BDA name="Check" bType="Check" />
+    </DAType>
+    <DAType id="AnalogueValue_1">
+      <BDA name="f" bType="FLOAT32" />
+    </DAType>
+    <DAType id="SPCCancel_1">
+      <BDA name="ctlVal" bType="BOOLEAN" />
+      <BDA name="origin" type="Originator_1" bType="Struct" />
+      <BDA name="ctlNum" bType="INT8U" />
+      <BDA name="T" bType="Timestamp" />
+      <BDA name="Test" bType="BOOLEAN" />
+    </DAType>
+    <DAType id="SPCCancel_5">
+      <BDA name="ctlVal" bType="BOOLEAN" />
+      <BDA name="operTm" bType="Timestamp" />
+      <BDA name="origin" type="Originator_1" bType="Struct" />
+      <BDA name="ctlNum" bType="INT8U" />
+      <BDA name="T" bType="Timestamp" />
+      <BDA name="Test" bType="BOOLEAN" />
+    </DAType>
     <EnumType id="CtlModels">
       <EnumVal ord="0">status-only</EnumVal>
       <EnumVal ord="1">direct-with-normal-security</EnumVal>
       <EnumVal ord="2">sbo-with-normal-security</EnumVal>
       <EnumVal ord="3">direct-with-enhanced-security</EnumVal>
       <EnumVal ord="4">sbo-with-enhanced-security</EnumVal>
+    </EnumType>
+    <EnumType id="SboClasses">
+      <EnumVal ord="0">operate-once</EnumVal>
+      <EnumVal ord="1">operate-many</EnumVal>
     </EnumType>
     <EnumType id="OrCat">
       <EnumVal ord="0">not-supported</EnumVal>

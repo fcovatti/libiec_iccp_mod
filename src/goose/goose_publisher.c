@@ -25,6 +25,8 @@
 #include "stack_config.h"
 #include "goose_publisher.h"
 #include "ethernet.h"
+#include "ber_encoder.h"
+#include "mms_server_internal.h"
 
 #define GOOSE_MAX_MESSAGE_SIZE 1518
 
@@ -60,7 +62,7 @@ struct sGoosePublisher {
 GoosePublisher
 GoosePublisher_create(CommParameters* parameters, char* interfaceID)
 {
-    GoosePublisher self = calloc(1, sizeof(struct sGoosePublisher));
+    GoosePublisher self = (GoosePublisher) calloc(1, sizeof(struct sGoosePublisher));
 
     prepareGooseBuffer(self, parameters, interfaceID);
 
@@ -187,7 +189,7 @@ prepareGooseBuffer(GoosePublisher self, CommParameters* parameters, char* interf
     else
         self->ethernetSocket = Ethernet_createSocket(CONFIG_ETHERNET_INTERFACE_ID, dstAddr);
 
-    self->buffer = malloc(GOOSE_MAX_MESSAGE_SIZE);
+    self->buffer = (uint8_t*) malloc(GOOSE_MAX_MESSAGE_SIZE);
 
     memcpy(self->buffer, dstAddr, 6);
     memcpy(self->buffer + 6, srcAddr, 6);

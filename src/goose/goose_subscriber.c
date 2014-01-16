@@ -21,7 +21,6 @@
  *  See COPYING file for the complete license text.
  */
 
-
 #include "libiec61850_platform_includes.h"
 
 #include "stack_config.h"
@@ -167,13 +166,13 @@ parseAllData(uint8_t* buffer, int allDataLength, MmsValue* dataSetValues)
         			}
         			else {
         				free(value->value.visibleString);
-        				value->value.visibleString = malloc(elementLength + 1);
+        				value->value.visibleString = (char*) malloc(elementLength + 1);
 						memcpy(value->value.visibleString, buffer + bufPos, elementLength);
 						value->value.visibleString[elementLength] = 0;
         			}
         		}
         		else {
-        			value->value.visibleString = malloc(elementLength + 1);
+        			value->value.visibleString = (char*) malloc(elementLength + 1);
         			memcpy(value->value.visibleString, buffer + bufPos, elementLength);
         			value->value.visibleString[elementLength] = 0;
         		}
@@ -412,7 +411,7 @@ gooseSubscriberLoop(void* threadParameter)
 {
     GooseSubscriber self = (GooseSubscriber) threadParameter;
 
-    uint8_t* buffer = malloc(ETH_BUFFER_LENGTH);
+    uint8_t* buffer = (uint8_t*) malloc(ETH_BUFFER_LENGTH);
 
     EthernetSocket socket;
 
@@ -450,7 +449,7 @@ gooseSubscriberLoop(void* threadParameter)
 GooseSubscriber
 GooseSubscriber_create(char* datSetRef, MmsValue* dataSetValues)
 {
-    GooseSubscriber self = calloc(1, sizeof(struct sGooseSubscriber));
+    GooseSubscriber self = (GooseSubscriber) calloc(1, sizeof(struct sGooseSubscriber));
 
     self->datSetRef = copyString(datSetRef);
     self->dataSetLen = strlen(datSetRef);
@@ -470,7 +469,7 @@ GooseSubscriber_setInterfaceId(GooseSubscriber self, char* interfaceId)
 void
 GooseSubscriber_subscribe(GooseSubscriber self)
 {
-    Thread thread = Thread_create(gooseSubscriberLoop, self, false);
+    Thread thread = Thread_create((ThreadExecutionFunction) gooseSubscriberLoop, self, false);
     self->receiver = thread;
     self->running = true;
     Thread_start(thread);

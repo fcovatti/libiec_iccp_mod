@@ -40,6 +40,10 @@ struct sMmsServer {
     Map valueCaches;
     bool isLocked;
     Semaphore modelMutex;
+
+    char* vendorName;
+    char* modelName;
+    char* revision;
 };
 
 static Map
@@ -59,7 +63,7 @@ createValueCachesForDomains(MmsDevice* device)
 MmsServer
 MmsServer_create(IsoServer isoServer, MmsDevice* device)
 {
-    MmsServer self = calloc(1, sizeof(struct sMmsServer));
+    MmsServer self = (MmsServer) calloc(1, sizeof(struct sMmsServer));
 
     self->isoServer = isoServer;
     self->device = device;
@@ -69,6 +73,41 @@ MmsServer_create(IsoServer isoServer, MmsDevice* device)
     self->modelMutex = Semaphore_create(1);
 
     return self;
+}
+
+void
+MmsServer_setServerIdentity(MmsServer self, char* vendorName, char* modelName, char* revision)
+{
+    self->vendorName = vendorName;
+    self->modelName = modelName;
+    self->revision = revision;
+}
+
+char*
+MmsServer_getVendorName(MmsServer self)
+{
+    if (self->vendorName != NULL)
+        return self->vendorName;
+    else
+        return CONFIG_DEFAULT_MMS_VENDOR_NAME;
+}
+
+char*
+MmsServer_getModelName(MmsServer self)
+{
+    if (self->modelName != NULL)
+        return self->modelName;
+    else
+        return CONFIG_DEFAULT_MMS_MODEL_NAME;
+}
+
+char*
+MmsServer_getRevision(MmsServer self)
+{
+    if (self->revision != NULL)
+        return self->revision;
+    else
+        return CONFIG_DEFAULT_MMS_REVISION;
 }
 
 void
@@ -123,7 +162,7 @@ void
 MmsServer_destroy(MmsServer self)
 {
     Map_deleteDeep(self->openConnections, false, closeConnection);
-    Map_deleteDeep(self->valueCaches, false, deleteSingleCache);
+    Map_deleteDeep(self->valueCaches, false, (void (*) (void*)) deleteSingleCache);
     Semaphore_destroy(self->modelMutex);
     free(self);
 }
@@ -131,7 +170,7 @@ MmsServer_destroy(MmsServer self)
 MmsValue*
 MmsServer_getValueFromCache(MmsServer self, MmsDomain* domain, char* itemId)
 {
-    MmsValueCache cache = Map_getEntry(self->valueCaches, domain);
+    MmsValueCache cache = (MmsValueCache) Map_getEntry(self->valueCaches, domain);
 
     if (cache != NULL) {
         return MmsValueCache_lookupValue(cache, itemId);
@@ -143,18 +182,18 @@ MmsServer_getValueFromCache(MmsServer self, MmsDomain* domain, char* itemId)
 void
 MmsServer_insertIntoCache(MmsServer self, MmsDomain* domain, char* itemId, MmsValue* value)
 {
-    MmsValueCache cache = Map_getEntry(self->valueCaches, domain);
+    MmsValueCache cache = (MmsValueCache) Map_getEntry(self->valueCaches, domain);
 
     if (cache != NULL) {
         MmsValueCache_insertValue(cache, itemId, value);
     }
 }
 
-MmsValueIndication
+MmsDataAccessError
 mmsServer_setValue(MmsServer self, MmsDomain* domain, char* itemId, MmsValue* value,
         MmsServerConnection* connection)
 {
-    MmsValueIndication indication;
+    MmsDataAccessError indication;
 
     if (self->writeHandler != NULL) {
         indication = self->writeHandler(self->writeHandlerParameter, domain,
@@ -166,16 +205,16 @@ mmsServer_setValue(MmsServer self, MmsDomain* domain, char* itemId, MmsValue* va
 
         if (cachedValue != NULL) {
             MmsValue_update(cachedValue, value);
-            indication = MMS_VALUE_OK;
+            indication = DATA_ACCESS_ERROR_SUCCESS;
         } else
-            indication = MMS_VALUE_ACCESS_DENIED;
+            indication = DATA_ACCESS_ERROR_OBJECT_VALUE_INVALID;
     }
 
     return indication;
 }
 
 MmsValue*
-mmsServer_getValue(MmsServer self, MmsDomain* domain, char* itemId)
+mmsServer_getValue(MmsServer self, MmsDomain* domain, char* itemId, MmsServerConnection* connection)
 {
     MmsValue* value = NULL;
 
@@ -184,7 +223,7 @@ mmsServer_getValue(MmsServer self, MmsDomain* domain, char* itemId)
     if (value == NULL)
         if (self->readHandler != NULL)
             value = self->readHandler(self->readHandlerParameter, domain,
-                    itemId);
+                    itemId, connection);
 
     return value;
 }
@@ -216,7 +255,8 @@ isoConnectionIndicationHandler(IsoConnectionIndication indication,
         if (mmsServer->connectionHandler != NULL)
             mmsServer->connectionHandler(mmsServer->connectionHandlerParameter,
                     mmsCon, MMS_SERVER_NEW_CONNECTION);
-    } else if (indication == ISO_CONNECTION_CLOSED) {
+    }
+    else if (indication == ISO_CONNECTION_CLOSED) {
         MmsServerConnection* mmsCon = (MmsServerConnection*) Map_removeEntry(
                 mmsServer->openConnections, connection, false);
 

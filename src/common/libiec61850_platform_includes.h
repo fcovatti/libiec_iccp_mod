@@ -11,9 +11,12 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
+#include <malloc.h>
 
 #include "hal.h"
 #include "string_utilities.h"
+
+#include "platform_endian.h"
 
 #ifdef _WIN32
 #ifdef BUILD_DLL

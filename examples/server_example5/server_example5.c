@@ -43,7 +43,7 @@ void sigint_handler(int signalId)
 }
 
 void
-observerCallback(DataAttribute* dataAttribute)
+observerCallback(DataAttribute* dataAttribute, ClientConnection connection)
 {
     if (dataAttribute == IEDMODEL_GenericIO_GGIO1_NamPlt_vendor) {
         printf("GGIO.NamPlt.vendor changed to %s\n",

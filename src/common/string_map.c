@@ -27,6 +27,6 @@
 Map
 StringMap_create() {
 	Map map = Map_create();
-	map->compareKeys = strcmp;
+	map->compareKeys = (int (*) (void*, void*)) strcmp;
 	return map;
 }

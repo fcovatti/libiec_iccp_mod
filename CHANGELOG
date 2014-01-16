@@ -1,3 +1,59 @@
+Changes to version 0.6
+------------------------
+- Client API: getDataSetDirectory ACSI service
+- Client API: create and delete data set ACSI services
+- Client API: added getRCBValue/setRCBValues ACSI services to improve client support for reporting
+- client side stack: improved error handling
+- Client API: Methods to allow clients track the connection state
+- Client API: Report handler provides access to reason-for-inclusion
+- Server API: added callbacks for connection events 
+- Server API: new ClientConnection object that will be handed over to some callback functions to allow connection specific reactions on events -> some callback handler signatures have changed! 
+- Added server side support for indexed RCBs
+- more efficient server side buffer handling
+- added BeagleBone LED control demo
+- DEBUG output can be switched on/off for stack components
+- and a lot of small improvements and bug fixes
+
+Changes to version 0.5.3
+------------------------
+- MMS client/server: multiple variables can be written with a single MMS write request
+- changed encoding of boolean to be compatible with buggy server devices
+- added TCP keep alive support to MMS client
+- added IedConnection_triggerGIReport function
+- some enhancements in server side report handling
+- some bug fixes
+
+Changes to version 0.5.2.1
+--------------------------
+- all examples now compile with VC++
+- CMake script supports GOOSE for Windows if winpcap is available
+
+Changes to version 0.5.2
+------------------------
+- fixed problem when compiling with MINGW
+- changed order of FC named variables according to standard
+- fixed some other compatibility problems
+- allows read access to sub-elements of control variables
+- allows write access to GoCB if the control block is not enabled
+- allows dynamically generated datasets to be used with GOOSE
+
+Changes to version 0.5.1
+------------------------
+- made code compatible with Visual Studio C++ (tested with versions 2010/2012)
+- added new build system based on cmake. It is now possible to create solution and project files for different versions ofVisual Studio as well as for other IDEs/toolchains.
+- fixed interoperability problem in ACSE layer
+- added server side support to use dynamically created data sets in reports (addSubscription service according to IEC 61400-25) 
+
+Changes to version 0.5
+----------------------
+- client support for control
+- client support for multiple outstanding requests.
+- full server support for all control models and time avtivated control
+- added client and server support for MMS identify service
+- extended build system to build shared libraries (linux shared objects and DLLs) with "make dynlib"
+- some small bug fixes in model generator tool
+- fixed bug in handling reject messages
+
 Changes to version 0.4.1
 ------------------------
 - SCL parser/code generator is more tolerant
