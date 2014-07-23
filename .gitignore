@@ -7,5 +7,6 @@
 *.d
 *.h.gch
 bin/*
+build/*
 .cproject
 .project
