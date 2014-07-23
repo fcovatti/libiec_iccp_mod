@@ -5,30 +5,22 @@
 #ifndef LIBIEC61850_PLATFORM_INCLUDES_H_
 #define LIBIEC61850_PLATFORM_INCLUDES_H_
 
-#include <stdlib.h>
-#include <stdarg.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-#include <stdio.h>
-#include <malloc.h>
+#include "libiec61850_common_api.h"
 
-#include "hal.h"
 #include "string_utilities.h"
+#include <stdio.h>
+#ifdef __APPLE__
+#include <malloc/malloc.h>
+#else
+#include <malloc.h>
+#endif
 
 #include "platform_endian.h"
 
-#ifdef _WIN32
-#ifdef BUILD_DLL
-  #define API __declspec(dllexport)
-#else
-  #define API __declspec(dllimport)
+#if (DEBUG != 1)
+#define NDEBUG 1
 #endif
 
-#define STDCALL __cdecl
-#else
-#define API
-#define STDCALL
-#endif
+#include <assert.h>
 
 #endif /* LIBIEC61850_PLATFORM_INCLUDES_H_ */

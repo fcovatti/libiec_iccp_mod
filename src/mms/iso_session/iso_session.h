@@ -26,6 +26,7 @@
 
 #include "byte_buffer.h"
 #include "buffer_chain.h"
+#include "iso_connection_parameters.h"
 
 typedef struct {
 	uint16_t callingSessionSelector;
@@ -40,7 +41,11 @@ typedef enum {
 	SESSION_ERROR,
 	SESSION_CONNECT,
 	SESSION_GIVE_TOKEN,
-	SESSION_DATA
+	SESSION_DATA,
+	SESSION_ABORT,
+	SESSION_FINISH,
+	SESSION_DISCONNECT,
+	SESSION_NOT_FINISHED
 } IsoSessionIndication;
 
 void
@@ -50,21 +55,24 @@ ByteBuffer*
 IsoSession_getUserData(IsoSession* session);
 
 void
-IsoSession_createDataSpdu(IsoSession* session, ByteBuffer* buffer);
-
-void
-IsoSession_createConnectSpdu(IsoSession* self, ByteBuffer* buffer, uint8_t payloadLength);
-
-void
-IsoSession_createAcceptSpdu(IsoSession* session, ByteBuffer* buffer, uint8_t payloadLength);
+IsoSession_createConnectSpdu(IsoSession* self, IsoConnectionParameters isoParameters, BufferChain buffer, BufferChain payload);
 
 IsoSessionIndication
 IsoSession_parseMessage(IsoSession* session, ByteBuffer* message);
 
 void
-IsoSession_createDataSpduBC(IsoSession* session, BufferChain buffer, BufferChain payload);
+IsoSession_createDataSpdu(IsoSession* session, BufferChain buffer, BufferChain payload);
 
 void
-IsoSession_createAcceptSpduBC(IsoSession* self, BufferChain buffer, BufferChain payload);
+IsoSession_createAcceptSpdu(IsoSession* self, BufferChain buffer, BufferChain payload);
+
+void
+IsoSession_createAbortSpdu(IsoSession* self, BufferChain buffer, BufferChain payload);
+
+void
+IsoSession_createFinishSpdu(IsoSession* self, BufferChain buffer, BufferChain payload);
+
+void
+IsoSession_createDisconnectSpdu(IsoSession* self, BufferChain buffer, BufferChain payload);
 
 #endif /* ISE_SESSION_H_ */

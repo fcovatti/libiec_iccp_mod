@@ -28,26 +28,28 @@ gooseListener(GooseSubscriber subscriber, void* parameter)
     printf("  stNum: %u sqNum: %u\n", GooseSubscriber_getStNum(subscriber),
             GooseSubscriber_getSqNum(subscriber));
     printf("  timeToLive: %u\n", GooseSubscriber_getTimeAllowedToLive(subscriber));
-    printf("  timestamp: %llu\n", GooseSubscriber_getTimestamp(subscriber));
+    printf("  timestamp: %"PRIu64"\n", GooseSubscriber_getTimestamp(subscriber));
 }
 
 int
 main(int argc, char** argv)
 {
-
     MmsValue* dataSetValues = MmsValue_createEmtpyArray(4);
+
     int i;
     for (i = 0; i < 4; i++) {
         MmsValue* dataSetEntry = MmsValue_newBoolean(false);
         MmsValue_setElement(dataSetValues, i, dataSetEntry);
     }
 
-    GooseSubscriber subscriber = GooseSubscriber_create("simpleIOGenericIO/LLN0$Events", dataSetValues);
+    GooseSubscriber subscriber = GooseSubscriber_create("simpleIOGenericIO/LLN0$GO$gcbEvents", dataSetValues);
 
     if (argc > 1) {
     	printf("Set interface id: %s\n", argv[1]);
     	GooseSubscriber_setInterfaceId(subscriber, argv[1]);
     }
+
+    GooseSubscriber_setAppId(subscriber, 0x1000);
 
     GooseSubscriber_setListener(subscriber, gooseListener, NULL);
 

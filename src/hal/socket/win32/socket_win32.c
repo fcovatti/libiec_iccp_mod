@@ -32,11 +32,14 @@
 #include "socket.h"
 #include "stack_config.h"
 
+
+#ifndef __MINGW64_VERSION_MAJOR
 struct tcp_keepalive {
     u_long  onoff;
     u_long  keepalivetime;
     u_long  keepaliveinterval;
 };
+#endif
 
 #define SIO_KEEPALIVE_VALS    _WSAIOW(IOC_VENDOR,4)
 
@@ -98,7 +101,7 @@ TcpServerSocket_create(char* address, int port)
 	WSADATA wsa;
 	SOCKET listen_socket = INVALID_SOCKET;
 
-	if (ec = WSAStartup(MAKEWORD(2,0), &wsa) != 0) {
+	if ((ec = WSAStartup(MAKEWORD(2,0), &wsa)) != 0) {
 		printf("winsock error: code %i\n");
 		return NULL;
 	}
@@ -141,19 +144,19 @@ TcpServerSocket_create(char* address, int port)
 }
 
 void
-ServerSocket_listen(ServerSocket socket)
+ServerSocket_listen(ServerSocket self)
 {
-	listen(socket->fd, socket->backLog);
+	listen(self->fd, self->backLog);
 }
 
 Socket
-ServerSocket_accept(ServerSocket socket)
+ServerSocket_accept(ServerSocket self)
 {
 	int fd;
 
 	Socket conSocket = NULL;
 
-	fd = accept(socket->fd, NULL, NULL);
+	fd = accept(self->fd, NULL, NULL);
 
 	if (fd >= 0) {
 		conSocket = TcpSocket_create();
@@ -164,27 +167,27 @@ ServerSocket_accept(ServerSocket socket)
 }
 
 void
-ServerSocket_setBacklog(ServerSocket socket, int backlog)
+ServerSocket_setBacklog(ServerSocket self, int backlog)
 {
-	socket->backLog = backlog;
+	self->backLog = backlog;
 }
 
 void
-ServerSocket_destroy(ServerSocket socket)
+ServerSocket_destroy(ServerSocket self)
 {
-	closesocket(socket->fd);
+	closesocket(self->fd);
 	WSACleanup();
-	free(socket);
+	free(self);
 }
 
 Socket
 TcpSocket_create()
 {
-	Socket socket = (Socket) malloc(sizeof(struct sSocket));
+	Socket self = (Socket) malloc(sizeof(struct sSocket));
 
-	socket->fd = -1;
+	self->fd = -1;
 
-	return socket;
+	return self;
 }
 
 int
@@ -260,23 +263,23 @@ Socket_getPeerAddress(Socket self)
 }
 
 int
-Socket_read(Socket socket, uint8_t* buf, int size)
+Socket_read(Socket self, uint8_t* buf, int size)
 {
-	return recv(socket->fd, (char*) buf, size, 0);
+	return recv(self->fd, (char*) buf, size, 0);
 }
 
 int
-Socket_write(Socket socket, uint8_t* buf, int size)
+Socket_write(Socket self, uint8_t* buf, int size)
 {
-	return send(socket->fd, (char*) buf, size, 0);
+	return send(self->fd, (char*) buf, size, 0);
 }
 
 void
-Socket_destroy(Socket socket)
+Socket_destroy(Socket self)
 {
-	if (socket->fd != -1) {
-		closesocket(socket->fd);
+	if (self->fd != -1) {
+		closesocket(self->fd);
 	}
 
-	free(socket);
+	free(self);
 }

@@ -3,7 +3,7 @@
  *
  *  Implementation of the ClientReportControlBlock class
  *
- *  Copyright 2013 Michael Zillgith
+ *  Copyright 2013, 2014 Michael Zillgith
  *
  *  This file is part of libIEC61850.
  *
@@ -28,6 +28,8 @@
 #include "stack_config.h"
 
 #include "ied_connection_private.h"
+
+#include "mms_mapping.h"
 
 static bool
 isBufferedRcb(char* objectReference)
@@ -167,7 +169,7 @@ ClientReportControlBlock_setDataSetReference(ClientReportControlBlock self, char
 }
 
 uint32_t
-ClientReportControlBlock_getConvRev(ClientReportControlBlock self)
+ClientReportControlBlock_getConfRev(ClientReportControlBlock self)
 {
     if (self->confRev != NULL)
         return MmsValue_toUint32(self->confRev);
@@ -175,26 +177,19 @@ ClientReportControlBlock_getConvRev(ClientReportControlBlock self)
         return 0;
 }
 
-MmsValue*
+int
 ClientReportControlBlock_getOptFlds(ClientReportControlBlock self)
 {
-    return self->optFlds;
+    return MmsValue_getBitStringAsInteger(self->optFlds);
 }
 
 void
-ClientReportControlBlock_setOptFlds(ClientReportControlBlock self, MmsValue* optFlds)
+ClientReportControlBlock_setOptFlds(ClientReportControlBlock self, int optFlds)
 {
-    if (self->optFlds != NULL) {
-        MmsValue_update(self->optFlds, optFlds);
-    }
-    else {
-        if (MmsValue_getType(optFlds) != MMS_BIT_STRING) {
-            if (DEBUG_IED_CLIENT)
-                printf("IED_CLIENT: ClientReportControlBlock_setOptFlds invalid argument type\n");
-        }
-        else
-            self->optFlds = MmsValue_clone(optFlds);
-    }
+    if (self->optFlds == 0)
+        self->optFlds = MmsValue_newBitString(10);
+
+    MmsValue_setBitStringFromInteger(self->optFlds, optFlds * 2); /* bit 0 is reserved in MMS mapping */
 }
 
 uint32_t
@@ -423,4 +418,235 @@ private_ClientReportControlBlock_updateValues(ClientReportControlBlock self, Mms
     }
 
 	return true;
+}
+
+
+
+ClientReportControlBlock
+IedConnection_getRCBValues(IedConnection self, IedClientError* error, char* rcbReference,
+        ClientReportControlBlock updateRcb)
+{
+    MmsError mmsError = MMS_ERROR_NONE;
+
+    ClientReportControlBlock returnRcb = updateRcb;
+
+    char domainId[65];
+    char itemId[129];
+
+    MmsMapping_getMmsDomainFromObjectReference(rcbReference, domainId);
+
+    strcpy(itemId, rcbReference + strlen(domainId) + 1);
+
+    StringUtils_replace(itemId, '.', '$');
+
+    if (DEBUG_IED_CLIENT)
+        printf("DEBUG_IED_CLIENT: readRCBValues for %s\n", rcbReference);
+
+    MmsValue* rcb = MmsConnection_readVariable(self->connection, &mmsError, domainId, itemId);
+
+    if (mmsError != MMS_ERROR_NONE) {
+        *error = iedConnection_mapMmsErrorToIedError(mmsError);
+
+        return NULL;
+    }
+
+    if (rcb == NULL) {
+        *error = IED_ERROR_OBJECT_DOES_NOT_EXIST;
+        return NULL;
+    }
+
+    if (MmsValue_getType(rcb) != MMS_STRUCTURE) {
+        if (DEBUG_IED_CLIENT)
+            printf("DEBUG_IED_CLIENT: getRCBValues returned wrong type!\n");
+
+        MmsValue_delete(rcb);
+
+        *error = IED_ERROR_UNKNOWN;
+        return NULL;
+    }
+
+    if (returnRcb == NULL)
+        returnRcb = ClientReportControlBlock_create(rcbReference);
+
+    private_ClientReportControlBlock_updateValues(returnRcb, rcb);
+
+    MmsValue_delete(rcb);
+
+    *error = IED_ERROR_OK;
+
+    return returnRcb;
+}
+
+void
+IedConnection_setRCBValues(IedConnection self, IedClientError* error, ClientReportControlBlock rcb,
+        uint32_t parametersMask, bool singleRequest)
+{
+    *error = IED_ERROR_OK;
+
+    MmsError mmsError = MMS_ERROR_NONE;
+
+    bool isBuffered = ClientReportControlBlock_isBuffered(rcb);
+
+    char domainId[65];
+    char itemId[129];
+
+    char* rcbReference = ClientReportControlBlock_getObjectReference(rcb);
+
+    MmsMapping_getMmsDomainFromObjectReference(rcbReference, domainId);
+
+    strcpy(itemId, rcbReference + strlen(domainId) + 1);
+
+    StringUtils_replace(itemId, '.', '$');
+
+    if (DEBUG_IED_CLIENT)
+        printf("DEBUG_IED_CLIENT: setRCBValues for %s\n", rcbReference);
+
+    int itemIdLen = strlen(itemId);
+
+    /* create the list of requested itemIds references */
+    LinkedList itemIds = LinkedList_create();
+    LinkedList values = LinkedList_create();
+
+    /* add resv/resvTms as first element and rptEna as last element */
+    if (parametersMask & RCB_ELEMENT_RESV) {
+        if (isBuffered)
+            goto error_invalid_parameter;
+
+        strcpy(itemId + itemIdLen, "$Resv");
+
+        LinkedList_add(itemIds, copyString(itemId));
+        LinkedList_add(values, rcb->resv);
+    }
+
+    if (parametersMask & RCB_ELEMENT_RESV_TMS) {
+        if (!isBuffered)
+            goto error_invalid_parameter;
+
+        strcpy(itemId + itemIdLen, "$ResvTms");
+
+        LinkedList_add(itemIds, copyString(itemId));
+        LinkedList_add(values, rcb->resvTms);
+    }
+
+    if (parametersMask & RCB_ELEMENT_RPT_ID) {
+        strcpy(itemId + itemIdLen, "$RptID");
+
+        LinkedList_add(itemIds, copyString(itemId));
+        LinkedList_add(values, rcb->rptId);
+    }
+
+    if (parametersMask & RCB_ELEMENT_DATSET) {
+        strcpy(itemId + itemIdLen, "$DatSet");
+
+        LinkedList_add(itemIds, copyString(itemId));
+        LinkedList_add(values, rcb->datSet);
+    }
+
+    if (parametersMask & RCB_ELEMENT_ENTRY_ID) {
+        strcpy(itemId + itemIdLen, "$EntryID");
+
+        LinkedList_add(itemIds, copyString(itemId));
+        LinkedList_add(values, rcb->entryId);
+    }
+
+    if (parametersMask & RCB_ELEMENT_OPT_FLDS) {
+        strcpy(itemId + itemIdLen, "$OptFlds");
+
+        LinkedList_add(itemIds, copyString(itemId));
+        LinkedList_add(values, rcb->optFlds);
+    }
+
+    if (parametersMask & RCB_ELEMENT_BUF_TM) {
+        strcpy(itemId + itemIdLen, "$BufTm");
+
+        LinkedList_add(itemIds, copyString(itemId));
+        LinkedList_add(values, rcb->bufTm);
+    }
+
+    if (parametersMask & RCB_ELEMENT_TRG_OPS) {
+        strcpy(itemId + itemIdLen, "$TrgOps");
+
+        LinkedList_add(itemIds, copyString(itemId));
+        LinkedList_add(values, rcb->trgOps);
+    }
+
+    if (parametersMask & RCB_ELEMENT_INTG_PD) {
+        strcpy(itemId + itemIdLen, "$IntgPd");
+
+        LinkedList_add(itemIds, copyString(itemId));
+        LinkedList_add(values, rcb->intgPd);
+    }
+
+    if (parametersMask & RCB_ELEMENT_GI) {
+        strcpy(itemId + itemIdLen, "$GI");
+
+        LinkedList_add(itemIds, copyString(itemId));
+        LinkedList_add(values, rcb->gi);
+    }
+
+    if (parametersMask & RCB_ELEMENT_PURGE_BUF) {
+        if (!isBuffered)
+            goto error_invalid_parameter;
+
+        strcpy(itemId + itemIdLen, "$PurgeBuf");
+
+        LinkedList_add(itemIds, copyString(itemId));
+        LinkedList_add(values, rcb->purgeBuf);
+    }
+
+    if (parametersMask & RCB_ELEMENT_TIME_OF_ENTRY) {
+        if (!isBuffered)
+            goto error_invalid_parameter;
+
+        strcpy(itemId + itemIdLen, "$TimeOfEntry");
+
+        LinkedList_add(itemIds, copyString(itemId));
+        LinkedList_add(values, rcb->timeOfEntry);
+    }
+
+    if (parametersMask & RCB_ELEMENT_RPT_ENA) {
+        strcpy(itemId + itemIdLen, "$RptEna");
+
+        LinkedList_add(itemIds, copyString(itemId));
+        LinkedList_add(values, rcb->rptEna);
+    }
+
+    if (singleRequest) {
+        LinkedList accessResults = NULL;
+
+        MmsConnection_writeMultipleVariables(self->connection, &mmsError, domainId, itemIds, values, &accessResults);
+
+        if (accessResults != NULL)
+            LinkedList_destroyDeep(accessResults, (LinkedListValueDeleteFunction) MmsValue_delete);
+
+        *error = iedConnection_mapMmsErrorToIedError(mmsError);
+        goto exit_function;
+    }
+    else {
+        LinkedList itemIdElement = LinkedList_getNext(itemIds);
+        LinkedList valueElement = LinkedList_getNext(values);
+
+        while (itemIdElement != NULL) {
+            char* rcbItemId = (char*) itemIdElement->data;
+            MmsValue* value = (MmsValue*) valueElement->data;
+
+            MmsConnection_writeVariable(self->connection, &mmsError, domainId, rcbItemId, value);
+
+            if (mmsError != MMS_ERROR_NONE)
+                break;
+
+            itemIdElement = LinkedList_getNext(itemIdElement);
+            valueElement = LinkedList_getNext(valueElement);
+        }
+
+        *error = iedConnection_mapMmsErrorToIedError(mmsError);
+        goto exit_function;
+    }
+
+    error_invalid_parameter:
+    *error = IED_ERROR_USER_PROVIDED_INVALID_ARGUMENT;
+
+    exit_function:
+    LinkedList_destroy(itemIds);
+    LinkedList_destroyStatic(values);
 }

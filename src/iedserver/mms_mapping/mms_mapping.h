@@ -57,6 +57,9 @@ void
 MmsMapping_startEventWorkerThread(MmsMapping* self);
 
 void
+MmsMapping_stopEventWorkerThread(MmsMapping* self);
+
+void
 MmsMapping_triggerReportObservers(MmsMapping* self, MmsValue* value, ReportInclusionFlag flag);
 
 void
@@ -107,6 +110,9 @@ MmsMapping_setIedServer(MmsMapping* self, IedServer iedServer);
 
 void
 MmsMapping_setConnectionIndicationHandler(MmsMapping* self, IedConnectionIndicationHandler handler, void* parameter);
+
+void
+MmsMapping_installWriteAccessHandler(MmsMapping* self, DataAttribute* dataAttribute, WriteAccessHandler handler);
 
 MmsDataAccessError
 Control_writeAccessControlObject(MmsMapping* self, MmsDomain* domain, char* variableIdOrig,

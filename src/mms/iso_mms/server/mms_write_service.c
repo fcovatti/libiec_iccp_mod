@@ -24,6 +24,11 @@
 #include "mms_server_internal.h"
 #include "mms_common_internal.h"
 #include "mms_types.h"
+
+#if (MMS_WRITE_SERVICE == 1)
+
+#define CONFIG_MMS_WRITE_SERVICE_MAX_NUMBER_OF_WRITE_ITEMS 100
+
 /**********************************************************************************************
  * MMS Write Service
  *********************************************************************************************/
@@ -60,8 +65,6 @@ mmsServer_createMmsWriteResponse(MmsServerConnection* connection,
 
 	der_encode(&asn_DEF_MmsPdu, mmsPdu, mmsServer_write_out, (void*) response);
 
-	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
-
 	asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
 
  	return 0;
@@ -93,7 +96,7 @@ mmsServer_handleWriteRequest(
 
 	asn_dec_rval_t rval; /* Decoder return value  */
 
-	rval = ber_decode(NULL, &asn_DEF_MmsPdu, (void**) &mmsPdu, buffer, MMS_MAXIMUM_PDU_SIZE);
+	rval = ber_decode(NULL, &asn_DEF_MmsPdu, (void**) &mmsPdu, buffer, CONFIG_MMS_MAXIMUM_PDU_SIZE);
 
 	if (rval.code != RC_OK) {
 	    mmsServer_writeMmsRejectPdu(&invokeId, MMS_ERROR_REJECT_INVALID_PDU, response);
@@ -109,13 +112,17 @@ mmsServer_handleWriteRequest(
         return;
 	}
 
+	if (numberOfWriteItems > CONFIG_MMS_WRITE_SERVICE_MAX_NUMBER_OF_WRITE_ITEMS) {
+	    mmsServer_writeMmsRejectPdu(&invokeId, MMS_ERROR_REJECT_OTHER, response);
+	    return;
+	}
+
     if (writeRequest->listOfData.list.count != numberOfWriteItems) {
         mmsServer_writeMmsRejectPdu(&invokeId, MMS_ERROR_REJECT_REQUEST_INVALID_ARGUMENT, response);
         return;
     }
 
-	MmsDataAccessError* accessResults =
-			(MmsDataAccessError*) alloca(numberOfWriteItems * sizeof(MmsDataAccessError));
+    MmsDataAccessError accessResults[CONFIG_MMS_WRITE_SERVICE_MAX_NUMBER_OF_WRITE_ITEMS * sizeof(MmsDataAccessError)];
 
 	bool sendResponse = true;
 
@@ -221,12 +228,8 @@ mmsServer_handleWriteRequest(
 
         }
 
-        MmsServer_lockModel(connection->server);
-
         MmsDataAccessError valueIndication =
                 mmsServer_setValue(connection->server, domain, nameIdStr, value, connection);
-
-        MmsServer_unlockModel(connection->server);
 
         if (valueIndication == DATA_ACCESS_ERROR_NO_RESPONSE)
             sendResponse = false;
@@ -245,4 +248,4 @@ mmsServer_handleWriteRequest(
 	asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
 }
 
-
+#endif /* (MMS_WRITE_SERVICE == 1) */

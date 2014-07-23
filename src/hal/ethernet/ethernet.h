@@ -26,10 +26,21 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*! \addtogroup hal
    *
    *  @{
    */
+
+/**
+ * @defgroup HAL_ETHERNET Direct access to the ethernet layer (optional - required by GOOSE and Sampled Values)
+ *
+ * @{
+ */
+
 
 /**
  * Opaque handle that represents an Ethernet "socket".
@@ -70,5 +81,11 @@ int
 Ethernet_receivePacket(EthernetSocket self, uint8_t* buffer, int bufferSize);
 
 /*! @} */
+
+/*! @} */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ETHERNET_H_ */

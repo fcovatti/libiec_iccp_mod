@@ -23,12 +23,22 @@
 
 #ifndef HAL_C_
 #define HAL_C_
-#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /*! \addtogroup hal
    *
    *  @{
    */
+
+/**
+ * @defgroup HAL_TIME Time related functions
+ *
+ * @{
+ */
 
 /**
  * Get the system time in milliseconds.
@@ -38,8 +48,15 @@
  *
  * \return the system time with millisecond resolution.
  */
-uint64_t Hal_getTimeInMs();
+uint64_t Hal_getTimeInMs(void);
 
 /*! @} */
+
+/*! @} */
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif /* HAL_C_ */

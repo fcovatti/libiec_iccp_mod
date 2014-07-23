@@ -29,7 +29,9 @@
 
 #include "ied_server_private.h"
 
-#include <malloc.h>
+#include "mms_value_internal.h"
+
+#if (CONFIG_IEC61850_CONTROL_SERVICE == 1)
 
 #ifndef DEBUG_IED_SERVER
 #define DEBUG_IED_SERVER 0
@@ -125,6 +127,10 @@ ControlObject_sendLastApplError(ControlObject* self, MmsServerConnection* connec
 
 void
 ControlObject_sendCommandTerminationReq(ControlObject* self, MmsServerConnection* connection);
+
+MmsValue*
+Control_readAccessControlObject(MmsMapping* self, MmsDomain* domain, char* variableIdOrig,
+        MmsServerConnection* connection);
 
 static void
 setState(ControlObject* self, int newState)
@@ -268,8 +274,9 @@ abortControlOperation(ControlObject* self)
 static MmsValue*
 getOperParameterOperTime(MmsValue* operParameters)
 {
-    if (operParameters->type == MMS_STRUCTURE) {
-        if (operParameters->value.structure.size == 7)
+    if (MmsValue_getType(operParameters) == MMS_STRUCTURE) {
+
+        if (MmsValue_getArraySize(operParameters) == 7)
             return MmsValue_getElement(operParameters, 1);
     }
 
@@ -368,9 +375,12 @@ ControlObject_create(IedServer iedServer, MmsDomain* domain, char* lnName, char*
 {
     ControlObject* self = (ControlObject*) calloc(1, sizeof(ControlObject));
 
+    if (DEBUG_IED_SERVER)
+        printf("create control object for LD: %s, LN: %s, name: %s\n", domain->domainName, lnName, name);
+
     self->stateLock = Semaphore_create(1);
 
-    self->name = name;
+    self->name = copyString(name);
     self->lnName = lnName;
     self->mmsDomain = domain;
     self->iedServer = iedServer;
@@ -407,6 +417,8 @@ ControlObject_destroy(ControlObject* self)
 
     if (self->origin != NULL)
         MmsValue_delete(self->origin);
+
+    free(self->name);
 
     Semaphore_destroy(self->stateLock);
 
@@ -648,8 +660,8 @@ Control_lookupControlObject(MmsMapping* self, MmsDomain* domain, char* lnName, c
 static MmsValue*
 getCtlVal(MmsValue* operParameters)
 {
-    if (operParameters->type == MMS_STRUCTURE) {
-        if (operParameters->value.structure.size > 5) {
+    if (MmsValue_getType(operParameters) == MMS_STRUCTURE) {
+        if (MmsValue_getArraySize(operParameters) > 5) {
             return MmsValue_getElement(operParameters, 0);
         }
     }
@@ -660,10 +672,10 @@ getCtlVal(MmsValue* operParameters)
 static MmsValue*
 getOperParameterCtlNum(MmsValue* operParameters)
 {
-    if (operParameters->type == MMS_STRUCTURE) {
-        if (operParameters->value.structure.size == 7)
+    if (MmsValue_getType(operParameters) == MMS_STRUCTURE) {
+        if (MmsValue_getArraySize(operParameters) == 7)
             return MmsValue_getElement(operParameters, 3);
-        else if (operParameters->value.structure.size == 6)
+        else if (MmsValue_getArraySize(operParameters) == 6)
             return MmsValue_getElement(operParameters, 2);
     }
 
@@ -673,10 +685,10 @@ getOperParameterCtlNum(MmsValue* operParameters)
 static MmsValue*
 getCancelParameterCtlNum(MmsValue* operParameters)
 {
-    if (operParameters->type == MMS_STRUCTURE) {
-        if (operParameters->value.structure.size == 6)
+    if (MmsValue_getType(operParameters) == MMS_STRUCTURE) {
+        if (MmsValue_getArraySize(operParameters) == 6)
             return MmsValue_getElement(operParameters, 3);
-        else if (operParameters->value.structure.size == 5)
+        else if (MmsValue_getArraySize(operParameters) == 5)
             return MmsValue_getElement(operParameters, 2);
     }
 
@@ -686,10 +698,10 @@ getCancelParameterCtlNum(MmsValue* operParameters)
 static MmsValue*
 getCancelParameterOrigin(MmsValue* operParameters)
 {
-    if (operParameters->type == MMS_STRUCTURE) {
-        if (operParameters->value.structure.size == 6)
+    if (MmsValue_getType(operParameters) == MMS_STRUCTURE) {
+        if (MmsValue_getArraySize(operParameters) == 6)
             return MmsValue_getElement(operParameters, 2);
-        else if (operParameters->value.structure.size == 5)
+        else if (MmsValue_getArraySize(operParameters) == 5)
             return MmsValue_getElement(operParameters, 1);
     }
 
@@ -699,10 +711,10 @@ getCancelParameterOrigin(MmsValue* operParameters)
 static MmsValue*
 getOperParameterTest(MmsValue* operParameters)
 {
-    if (operParameters->type == MMS_STRUCTURE) {
-        if (operParameters->value.structure.size == 7)
+    if (MmsValue_getType(operParameters) == MMS_STRUCTURE) {
+        if (MmsValue_getArraySize(operParameters) == 7)
             return MmsValue_getElement(operParameters, 5);
-        else if (operParameters->value.structure.size == 6)
+        else if (MmsValue_getArraySize(operParameters) == 6)
             return MmsValue_getElement(operParameters, 4);
     }
 
@@ -712,10 +724,10 @@ getOperParameterTest(MmsValue* operParameters)
 static MmsValue*
 getOperParameterCheck(MmsValue* operParameters)
 {
-    if (operParameters->type == MMS_STRUCTURE) {
-        if (operParameters->value.structure.size == 7)
+    if (MmsValue_getType(operParameters) == MMS_STRUCTURE) {
+        if (MmsValue_getArraySize(operParameters) == 7)
             return MmsValue_getElement(operParameters, 6);
-        else if (operParameters->value.structure.size == 6)
+        else if (MmsValue_getArraySize(operParameters) == 6)
             return MmsValue_getElement(operParameters, 5);
     }
 
@@ -725,10 +737,10 @@ getOperParameterCheck(MmsValue* operParameters)
 static MmsValue*
 getOperParameterOrigin(MmsValue* operParameters)
 {
-    if (operParameters->type == MMS_STRUCTURE) {
-        if (operParameters->value.structure.size == 7)
+    if (MmsValue_getType(operParameters) == MMS_STRUCTURE) {
+        if (MmsValue_getArraySize(operParameters) == 7)
             return MmsValue_getElement(operParameters, 2);
-        else if (operParameters->value.structure.size == 6)
+        else if (MmsValue_getArraySize(operParameters) == 6)
             return MmsValue_getElement(operParameters, 1);
     }
 
@@ -740,10 +752,10 @@ getOperParameterTime(MmsValue* operParameters)
 {
     MmsValue* timeParameter = NULL;
 
-    if (operParameters->type == MMS_STRUCTURE) {
-        if (operParameters->value.structure.size == 7)
+    if (MmsValue_getType(operParameters) == MMS_STRUCTURE) {
+        if (MmsValue_getArraySize(operParameters) == 7)
             timeParameter = MmsValue_getElement(operParameters, 4);
-        else if (operParameters->value.structure.size == 6)
+        else if (MmsValue_getArraySize(operParameters) == 6)
             timeParameter = MmsValue_getElement(operParameters, 3);
     }
 
@@ -757,7 +769,7 @@ getOperParameterTime(MmsValue* operParameters)
 void
 ControlObject_sendCommandTerminationReq(ControlObject* self, MmsServerConnection* connection)
 {
-    char* itemId = (char*) alloca(130);
+    char itemId[130];
 
     createStringInBuffer(itemId, 4, self->lnName, "$CO$", self->name, "$Oper");
 
@@ -766,15 +778,15 @@ ControlObject_sendCommandTerminationReq(ControlObject* self, MmsServerConnection
 
     char* domainId = MmsDomain_getName(self->mmsDomain);
 
-    MmsVariableAccessSpecification* varSpec = (MmsVariableAccessSpecification*)
-    alloca(sizeof(MmsVariableAccessSpecification));
-    varSpec->itemId = itemId;
-    varSpec->domainId = domainId;
+    MmsVariableAccessSpecification varSpec;
+
+    varSpec.itemId = itemId;
+    varSpec.domainId = domainId;
 
     LinkedList varSpecList = LinkedList_create();
     LinkedList values = LinkedList_create();
 
-    LinkedList_add(varSpecList, varSpec);
+    LinkedList_add(varSpecList, &varSpec);
     LinkedList_add(values, self->oper);
 
     MmsServerConnection_sendInformationReportListOfVariables(connection, varSpecList, values, false);
@@ -787,12 +799,17 @@ void
 ControlObject_sendLastApplError(ControlObject* self, MmsServerConnection* connection, char* ctlVariable, int error,
         int addCause, MmsValue* ctlNum, MmsValue* origin, bool handlerMode)
 {
-    MmsValue* lastAppIError = (MmsValue*) alloca(sizeof(struct sMmsValue));
-    lastAppIError->type = MMS_STRUCTURE;
-    lastAppIError->value.structure.size = 5;
-    lastAppIError->value.structure.components = (MmsValue**) alloca(5 * sizeof(MmsValue*));
+    MmsValue lastApplErrorMemory;
 
-    char* ctlObj = (char*) alloca(130);
+    MmsValue* lastApplError = &lastApplErrorMemory;
+    lastApplError->type = MMS_STRUCTURE;
+    lastApplError->value.structure.size = 5;
+
+    MmsValue* componentContainer[5];
+
+    lastApplError->value.structure.components =componentContainer;
+
+    char ctlObj[130];
 
     createStringInBuffer(ctlObj, 3, self->ctlObjectName, "$", ctlVariable);
 
@@ -802,22 +819,24 @@ ControlObject_sendLastApplError(ControlObject* self, MmsServerConnection* connec
         printf("IED_SERVER:    ctlNum: %u\n", MmsValue_toUint32(ctlNum));
     }
 
-    MmsValue* ctlObjValue = (MmsValue*) alloca(sizeof(struct sMmsValue));
+    MmsValue ctlObjValueMemory;
+
+    MmsValue* ctlObjValue = &ctlObjValueMemory;
     ctlObjValue->type = MMS_VISIBLE_STRING;
     ctlObjValue->value.visibleString = ctlObj;
 
-    MmsValue_setElement(lastAppIError, 0, ctlObjValue);
+    MmsValue_setElement(lastApplError, 0, ctlObjValue);
 
     MmsValue_setInt32(self->error, error);
     MmsValue_setInt32(self->addCause, addCause);
 
-    MmsValue_setElement(lastAppIError, 1, self->error);
-    MmsValue_setElement(lastAppIError, 2, origin);
-    MmsValue_setElement(lastAppIError, 3, ctlNum);
-    MmsValue_setElement(lastAppIError, 4, self->addCause);
+    MmsValue_setElement(lastApplError, 1, self->error);
+    MmsValue_setElement(lastApplError, 2, origin);
+    MmsValue_setElement(lastApplError, 3, ctlNum);
+    MmsValue_setElement(lastApplError, 4, self->addCause);
 
     MmsServerConnection_sendInformationReportSingleVariableVMDSpecific(connection,
-            "LastApplError", lastAppIError, handlerMode);
+            "LastApplError", lastApplError, handlerMode);
 }
 
 static void
@@ -837,6 +856,27 @@ updateControlParameters(ControlObject* controlObject, MmsValue* ctlVal, MmsValue
     controlObject->origin = MmsValue_clone(origin);
 }
 
+static bool
+doesElementEquals(char* element, char* name)
+{
+    int i = 0;
+
+    while (name[i] != 0) {
+        if (element[i] == 0)
+            return false;
+
+        if (element[i] != name[i])
+            return false;
+
+        i++;
+    }
+
+    if ((element[i] != 0) && (element[i] != '$'))
+        return false;
+
+    return true;
+}
+
 MmsValue*
 Control_readAccessControlObject(MmsMapping* self, MmsDomain* domain, char* variableIdOrig,
         MmsServerConnection* connection)
@@ -844,11 +884,17 @@ Control_readAccessControlObject(MmsMapping* self, MmsDomain* domain, char* varia
     MmsValue* value = NULL;
 
     if (DEBUG_IED_SERVER)
-        printf("readAccessControlObject: %s\n", variableIdOrig);
+        printf("IED_SERVER: readAccessControlObject: %s\n", variableIdOrig);
 
-    char* variableId = copyString(variableIdOrig);
+    char variableId[129];
+
+    strncpy(variableId, variableIdOrig, 128);
+    variableId[128] = 0;
 
     char* separator = strchr(variableId, '$');
+
+    if (separator == NULL)
+        return NULL;
 
     *separator = 0;
 
@@ -862,10 +908,38 @@ Control_readAccessControlObject(MmsMapping* self, MmsDomain* domain, char* varia
     if (objectName == NULL)
         return NULL;
 
-    char* varName = MmsMapping_getNextNameElement(objectName);
+    char* varName =  MmsMapping_getNextNameElement(objectName);
 
-    if (varName != NULL)
-        *(varName - 1) = 0;
+    if (varName != NULL) {
+
+        bool foundVar = false;
+
+        char* nextVarName = varName;
+
+        do {
+            if (doesElementEquals(varName, "Oper") ||
+                doesElementEquals(varName, "SBO") ||
+                doesElementEquals(varName, "SBOw") ||
+                doesElementEquals(varName, "Cancel"))
+            {
+                *(varName - 1) = 0;
+                foundVar = true;
+                break;
+            }
+
+            nextVarName  = MmsMapping_getNextNameElement(varName);
+
+            if (nextVarName != NULL)
+                varName = nextVarName;
+
+        } while (nextVarName != NULL);
+
+        if (foundVar == false)
+            varName = NULL;
+    }
+
+    if (DEBUG_IED_SERVER)
+        printf("IED_SERVER: read_access control object: objectName: (%s) varName: (%s)\n", objectName, varName);
 
     ControlObject* controlObject = Control_lookupControlObject(self, domain, lnName, objectName);
 
@@ -907,7 +981,7 @@ Control_readAccessControlObject(MmsMapping* self, MmsDomain* domain, char* varia
                     if (DEBUG_IED_SERVER)
                         printf("select not applicable for control model %i\n", controlObject->ctlModel);
 
-                    value = NULL;
+                    value = ControlObject_getSBO(controlObject);
                 }
             }
 
@@ -922,9 +996,38 @@ Control_readAccessControlObject(MmsMapping* self, MmsDomain* domain, char* varia
             value = ControlObject_getMmsValue(controlObject);
     }
 
-    free(variableId);
-
     return value;
+}
+
+//INFO: function can be removed if no certification is required
+static bool
+checkValidityOfOriginParameter(MmsValue* origin)
+{
+    if (MmsValue_getType(origin) != MMS_STRUCTURE)
+        return false;
+
+    if (MmsValue_getArraySize(origin) != 2)
+        return false;
+
+    MmsValue* orIdent = MmsValue_getElement(origin, 1);
+
+    if (MmsValue_getType(orIdent) != MMS_OCTET_STRING)
+        return false;
+
+    if (MmsValue_getOctetStringSize(orIdent) > 64)
+        return false;
+
+    MmsValue* orCat = MmsValue_getElement(origin, 0);
+
+    if (MmsValue_getType(orCat) != MMS_INTEGER)
+        return false;
+
+    int orCatIntValue = MmsValue_toInt32(orCat);
+
+    if ((orCatIntValue < 0) || (orCatIntValue > 8))
+        return false;
+
+    return true;
 }
 
 MmsDataAccessError
@@ -933,9 +1036,18 @@ Control_writeAccessControlObject(MmsMapping* self, MmsDomain* domain, char* vari
 {
     MmsDataAccessError indication = DATA_ACCESS_ERROR_OBJECT_ACCESS_DENIED;
 
-    char* variableId = copyString(variableIdOrig);
+    if (DEBUG_IED_SERVER)
+        printf("IED_SERVER: writeAccessControlObject: %s\n", variableIdOrig);
+
+    char variableId[129];
+
+    strncpy(variableId, variableIdOrig, 128);
+    variableId[128] = 0;
 
     char* separator = strchr(variableId, '$');
+
+    if (separator == NULL)
+        goto free_and_return;
 
     *separator = 0;
 
@@ -949,12 +1061,45 @@ Control_writeAccessControlObject(MmsMapping* self, MmsDomain* domain, char* vari
     if (objectName == NULL)
         goto free_and_return;
 
-    char* varName = MmsMapping_getNextNameElement(objectName);
+    char* varName =  MmsMapping_getNextNameElement(objectName);
 
-    if (varName != NULL)
-        *(varName - 1) = 0;
-    else
+    if (varName != NULL) {
+
+        bool foundVar = false;
+
+        char* nextVarName = varName;
+
+        do {
+            if (doesElementEquals(varName, "Oper") ||
+                doesElementEquals(varName, "SBO") ||
+                doesElementEquals(varName, "SBOw") ||
+                doesElementEquals(varName, "Cancel"))
+            {
+                *(varName - 1) = 0;
+                foundVar = true;
+                break;
+            }
+
+            nextVarName  = MmsMapping_getNextNameElement(varName);
+
+            if (nextVarName != NULL)
+                varName = nextVarName;
+
+        } while (nextVarName != NULL);
+
+        if (foundVar == false)
+            varName = NULL;
+    }
+
+
+    if (DEBUG_IED_SERVER)
+        printf("IED_SERVER: write access control: objectName: (%s) varName: (%s)\n", objectName, varName);
+
+
+    if (varName == NULL) {
+        indication = DATA_ACCESS_ERROR_OBJECT_ACCESS_DENIED;
         goto free_and_return;
+    }
 
     ControlObject* controlObject = Control_lookupControlObject(self, domain, lnName, objectName);
 
@@ -977,6 +1122,11 @@ Control_writeAccessControlObject(MmsMapping* self, MmsDomain* domain, char* vari
                 MmsValue* origin = getOperParameterOrigin(value);
                 MmsValue* check = getOperParameterCheck(value);
                 MmsValue* test = getOperParameterTest(value);
+
+                if (checkValidityOfOriginParameter(origin) == false) {
+                    indication = DATA_ACCESS_ERROR_OBJECT_VALUE_INVALID;
+                    goto free_and_return;
+                }
 
                 uint64_t currentTime = Hal_getTimeInMs();
 
@@ -1059,6 +1209,11 @@ Control_writeAccessControlObject(MmsMapping* self, MmsDomain* domain, char* vari
             goto free_and_return;
         }
 
+        if (checkValidityOfOriginParameter(origin) == false) {
+            indication = DATA_ACCESS_ERROR_OBJECT_VALUE_INVALID;
+            goto free_and_return;
+        }
+
         uint64_t currentTime = Hal_getTimeInMs();
 
         checkSelectTimeout(controlObject, currentTime);
@@ -1093,7 +1248,8 @@ Control_writeAccessControlObject(MmsMapping* self, MmsDomain* domain, char* vari
 
                 if (controlObject->ctlModel == 4) { /* select-before-operate with enhanced security */
                     if ((MmsValue_equals(ctlVal, controlObject->ctlVal) &&
-                            MmsValue_equals(origin, controlObject->origin)) == false)
+                         MmsValue_equals(origin, controlObject->origin) &&
+                         MmsValue_equals(ctlNum, controlObject->ctlNum)) == false)
                     {
 
                         indication = DATA_ACCESS_ERROR_TYPE_INCONSISTENT;
@@ -1132,7 +1288,7 @@ Control_writeAccessControlObject(MmsMapping* self, MmsDomain* domain, char* vari
 
             if (controlObject->timeActivatedOperate == false) {
 
-                bool checkOk = true;
+                CheckHandlerResult checkResult = CONTROL_ACCEPTED;
 
                 setState(controlObject, STATE_PERFORM_TEST);
 
@@ -1141,12 +1297,13 @@ Control_writeAccessControlObject(MmsMapping* self, MmsDomain* domain, char* vari
                     ClientConnection clientConnection = private_IedServer_getClientConnectionByHandle(self->iedServer,
                             connection);
 
-                    checkOk = controlObject->checkHandler(
+                    checkResult = controlObject->checkHandler(
                             controlObject->checkHandlerParameter, ctlVal, testCondition, interlockCheck,
                             clientConnection);
                 }
 
-                if (checkOk) {
+
+                if (checkResult == CONTROL_ACCEPTED) {
                     indication = DATA_ACCESS_ERROR_NO_RESPONSE;
 
                     controlObject->clientConnection = connection;
@@ -1155,9 +1312,16 @@ Control_writeAccessControlObject(MmsMapping* self, MmsDomain* domain, char* vari
                     startControlOperateThread(controlObject);
                 }
                 else {
-                    abortControlOperation(controlObject);
+                    if (checkResult == CONTROL_HARDWARE_FAULT)
+                        indication = DATA_ACCESS_ERROR_HARDWARE_FAULT;
+                    else if (checkResult == CONTROL_TEMPORARILY_UNAVAILABLE)
+                        indication = DATA_ACCESS_ERROR_TEMPORARILY_UNAVAILABLE;
+                    else if (checkResult == CONTROL_OBJECT_UNDEFINED)
+                        indication = DATA_ACCESS_ERROR_OBJECT_UNDEFINED;
+                    else
+                        indication = DATA_ACCESS_ERROR_OBJECT_ACCESS_DENIED;
 
-                    indication = DATA_ACCESS_ERROR_TEMPORARILY_UNAVAILABLE;
+                    abortControlOperation(controlObject);
                 }
             }
 
@@ -1175,7 +1339,7 @@ Control_writeAccessControlObject(MmsMapping* self, MmsDomain* domain, char* vari
         }
     }
     else if (strcmp(varName, "Cancel") == 0) {
-        if (DEBUG)
+        if (DEBUG_IED_SERVER)
             printf("Received cancel!\n");
 
         int state = getState(controlObject);
@@ -1214,8 +1378,10 @@ Control_writeAccessControlObject(MmsMapping* self, MmsDomain* domain, char* vari
         }
     }
 
-    free_and_return:
-    free(variableId);
+free_and_return:
 
     return indication;
 }
+
+#endif /* (CONFIG_IEC61850_CONTROL_SERVICE == 1) */
+

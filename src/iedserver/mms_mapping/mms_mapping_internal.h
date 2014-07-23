@@ -35,7 +35,10 @@ struct sMmsMapping {
     LinkedList gseControls;
     LinkedList controlObjects;
     LinkedList observedObjects;
+    LinkedList attributeAccessHandlers;
+
     bool reportThreadRunning;
+    bool reportThreadFinished;
     Thread reportWorkerThread;
 
     IedServer iedServer;

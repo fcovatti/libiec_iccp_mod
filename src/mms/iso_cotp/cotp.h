@@ -29,6 +29,7 @@
 #include "byte_stream.h"
 #include "buffer_chain.h"
 #include "socket.h"
+#include "iso_connection_parameters.h"
 
 typedef struct {
     int32_t tsap_id_src;
@@ -46,14 +47,13 @@ typedef struct {
     bool isLastDataUnit;
     ByteBuffer* payload;
     ByteBuffer* writeBuffer;
-    ByteStream stream;
 } CotpConnection;
 
 typedef enum {
     OK, ERROR, CONNECT_INDICATION, DATA_INDICATION, DISCONNECT_INDICATION
 } CotpIndication;
 
-int inline /* in byte */
+int /* in byte */
 CotpConnection_getTpduSize(CotpConnection* self);
 
 void
@@ -65,25 +65,25 @@ CotpConnection_init(CotpConnection* self, Socket socket, ByteBuffer* payloadBuff
 void
 CotpConnection_destroy(CotpConnection* self);
 
-void
-ByteStream_setWriteBuffer(ByteStream self, ByteBuffer* writeBuffer);
-
 CotpIndication
 CotpConnection_parseIncomingMessage(CotpConnection* self);
 
 CotpIndication
-CotpConnection_sendConnectionRequestMessage(CotpConnection* self);
+CotpConnection_sendConnectionRequestMessage(CotpConnection* self, IsoConnectionParameters isoParameters);
 
 CotpIndication
 CotpConnection_sendConnectionResponseMessage(CotpConnection* self);
 
 CotpIndication
-CotpConnection_sendDataMessage(CotpConnection* self, ByteBuffer* payload);
-
-CotpIndication
-CotpConnection_sendDataMessageBC(CotpConnection* self, BufferChain payload);
+CotpConnection_sendDataMessage(CotpConnection* self, BufferChain payload);
 
 ByteBuffer*
 CotpConnection_getPayload(CotpConnection* self);
+
+int
+CotpConnection_getSrcRef(CotpConnection* self);
+
+int
+CotpConnection_getDstRef(CotpConnection* self);
 
 #endif /* COTP_H_ */

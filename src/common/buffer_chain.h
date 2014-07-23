@@ -24,6 +24,9 @@ BufferChain_init(BufferChain self, int length, int partLength, BufferChain nextP
 void
 BufferChain_destroy(BufferChain self);
 
+int /* returns the number of bytes written to the buffer */
+BufferChain_dumpToBuffer(BufferChain self, uint8_t* buffer, int bufferMaxSize);
+
 
 typedef struct {
     uint8_t* memory;

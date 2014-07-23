@@ -27,6 +27,23 @@
 #ifndef IED_SERVER_PRIVATE_H_
 #define IED_SERVER_PRIVATE_H_
 
+#define ALLOW_WRITE_ACCESS_DC 1
+#define ALLOW_WRITE_ACCESS_CF 2
+#define ALLOW_WRITE_ACCESS_SP 4
+#define ALLOW_WRITE_ACCESS_SV 8
+
+struct sIedServer
+{
+    IedModel* model;
+    MmsDevice* mmsDevice;
+    MmsServer mmsServer;
+    IsoServer isoServer;
+    MmsMapping* mmsMapping;
+    LinkedList clientConnections;
+    uint8_t writeAccessPolicies;
+};
+
+
 ClientConnection
 private_IedServer_getClientConnectionByHandle(IedServer self, void* serverConnectionHandle);
 

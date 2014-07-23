@@ -42,15 +42,18 @@ int main(int argc, char** argv) {
 
 	MmsError mmsError;
 
+	char* password = "testpw";
+
 	/* use authentication */
 	AcseAuthenticationParameter auth = (AcseAuthenticationParameter) calloc(1, sizeof(struct sAcseAuthenticationParameter));
-	auth->mechanism = AUTH_PASSWORD;
-	auth->value.password.string = "testpw";
+	auth->mechanism = ACSE_AUTH_PASSWORD;
+	auth->value.password.octetString= (uint8_t*) password;
+	auth->value.password.passwordLength = strlen(password);
 
-	IsoConnectionParameters* connectionParams = (IsoConnectionParameters*) calloc(1, sizeof(IsoConnectionParameters));
-	connectionParams->acseAuthParameter = auth;
+	IsoConnectionParameters connectionParameters =
+	        MmsConnection_getIsoConnectionParameters(con);
 
-	MmsConnection_setIsoConnectionParameters(con, connectionParams);
+	IsoConnectionParameters_setAcseAuthenticationParameter(connectionParameters, auth);
 
 	if (!MmsConnection_connect(con, &mmsError, hostname, tcpPort)) {
 		printf("MMS connect failed!\n");

@@ -12,38 +12,41 @@
 void
 printSpaces(int spaces)
 {
-	int i;
+    int i;
 
-	for (i = 0; i < spaces; i++)
-		printf(" ");
+    for (i = 0; i < spaces; i++)
+        printf(" ");
 }
 
 void
-printDataDirectory(char* doRef, IedConnection con, int spaces) {
-	IedClientError error;
+printDataDirectory(char* doRef, IedConnection con, int spaces)
+{
+    IedClientError error;
 
-	LinkedList dataAttributes = IedConnection_getDataDirectory(con, &error, doRef);
+    LinkedList dataAttributes = IedConnection_getDataDirectory(con, &error, doRef);
 
-	if (dataAttributes != NULL) {
-		LinkedList dataAttribute = LinkedList_getNext(dataAttributes);
+    if (dataAttributes != NULL) {
+        LinkedList dataAttribute = LinkedList_getNext(dataAttributes);
 
-		while (dataAttribute != NULL) {
-			char* daName = (char*) dataAttribute->data;
+        while (dataAttribute != NULL) {
+            char* daName = (char*) dataAttribute->data;
 
-			printSpaces(spaces);
-			printf("DA: %s\n", (char*) dataAttribute->data);
+            printSpaces(spaces);
+            printf("DA: %s\n", (char*) dataAttribute->data);
 
-			dataAttribute = LinkedList_getNext(dataAttribute);
+            dataAttribute = LinkedList_getNext(dataAttribute);
 
-			char* daRef = (char*) alloca(129);
-			sprintf(daRef, "%s.%s", doRef, daName);
-			printDataDirectory(daRef, con, spaces + 2);
-		}
+            char daRef[129];
+            sprintf(daRef, "%s.%s", doRef, daName);
+            printDataDirectory(daRef, con, spaces + 2);
+        }
 
-	}
+    }
 }
 
-int main(int argc, char** argv) {
+int
+main(int argc, char** argv)
+{
 
     char* hostname;
     int tcpPort = 102;
@@ -64,59 +67,62 @@ int main(int argc, char** argv) {
 
     if (error == IED_ERROR_OK) {
 
-    	printf("Get logical device list...\n");
-    	LinkedList deviceList = IedConnection_getLogicalDeviceList(con, &error);
+        printf("Get logical device list...\n");
+        LinkedList deviceList = IedConnection_getLogicalDeviceList(con, &error);
 
-    	LinkedList device = LinkedList_getNext(deviceList);
+        printf("error: %i\n", error);
 
-    	while (device != NULL) {
-    		printf("LD: %s\n", (char*) device->data);
+        LinkedList device = LinkedList_getNext(deviceList);
 
-    		LinkedList logicalNodes = IedConnection_getLogicalDeviceDirectory(con, &error,
-    				(char*) device->data);
+        while (device != NULL) {
+            printf("LD: %s\n", (char*) device->data);
 
-    		LinkedList logicalNode = LinkedList_getNext(logicalNodes);
+            LinkedList logicalNodes = IedConnection_getLogicalDeviceDirectory(con, &error,
+                    (char*) device->data);
 
-    		while (logicalNode != NULL) {
-    			printf("  LN: %s\n", (char*) logicalNode->data);
+            LinkedList logicalNode = LinkedList_getNext(logicalNodes);
 
-    			char* lnRef = (char*) alloca(129);
+            while (logicalNode != NULL) {
+                printf("  LN: %s\n", (char*) logicalNode->data);
 
-    			sprintf(lnRef, "%s/%s", (char*) device->data, (char*) logicalNode->data);
+                char lnRef[129];
 
-    			LinkedList dataObjects = IedConnection_getLogicalNodeDirectory(con, &error,
-    					lnRef, ACSI_CLASS_DATA_OBJECT);
+                sprintf(lnRef, "%s/%s", (char*) device->data, (char*) logicalNode->data);
 
-    			LinkedList dataObject = LinkedList_getNext(dataObjects);
+                LinkedList dataObjects = IedConnection_getLogicalNodeDirectory(con, &error,
+                        lnRef, ACSI_CLASS_DATA_OBJECT);
 
-    			while (dataObject != NULL) {
-    			    char* dataObjectName = (char*) dataObject->data;
+                LinkedList dataObject = LinkedList_getNext(dataObjects);
 
-    			    printf("    DO: %s\n", dataObjectName);
+                while (dataObject != NULL) {
+                    char* dataObjectName = (char*) dataObject->data;
 
-    			    dataObject = LinkedList_getNext(dataObject);
+                    printf("    DO: %s\n", dataObjectName);
 
-    			    char* doRef = (char*) alloca(129);
+                    dataObject = LinkedList_getNext(dataObject);
 
-    			    sprintf(doRef, "%s/%s.%s", (char*) device->data, (char*) logicalNode->data, dataObjectName);
+                    char doRef[129];
 
-    			    printDataDirectory(doRef, con, 6);
-    			}
+                    sprintf(doRef, "%s/%s.%s", (char*) device->data, (char*) logicalNode->data, dataObjectName);
 
-    			LinkedList_destroy(dataObjects);
+                    printDataDirectory(doRef, con, 6);
+                }
 
-    			LinkedList dataSets = IedConnection_getLogicalNodeDirectory(con, &error, lnRef,
-    					ACSI_CLASS_DATA_SET);
+                LinkedList_destroy(dataObjects);
 
-    			LinkedList dataSet = LinkedList_getNext(dataSets);
+                LinkedList dataSets = IedConnection_getLogicalNodeDirectory(con, &error, lnRef,
+                        ACSI_CLASS_DATA_SET);
 
-    			while (dataSet != NULL) {
-    				char* dataSetName = (char*) dataSet->data;
-    				bool isDeletable;
-                    char* dataSetRef = (char*) alloca(129);
+                LinkedList dataSet = LinkedList_getNext(dataSets);
+
+                while (dataSet != NULL) {
+                    char* dataSetName = (char*) dataSet->data;
+                    bool isDeletable;
+                    char dataSetRef[129];
                     sprintf(dataSetRef, "%s.%s", lnRef, dataSetName);
 
-                    LinkedList dataSetMembers = IedConnection_getDataSetDirectory(con, &error, dataSetRef, &isDeletable);
+                    LinkedList dataSetMembers = IedConnection_getDataSetDirectory(con, &error, dataSetRef,
+                            &isDeletable);
 
                     if (isDeletable)
                         printf("    Data set: %s (deletable)\n", dataSetName);
@@ -134,58 +140,57 @@ int main(int argc, char** argv) {
                         dataSetMemberRef = LinkedList_getNext(dataSetMemberRef);
                     }
 
-    				dataSet = LinkedList_getNext(dataSet);
-    			}
+                    dataSet = LinkedList_getNext(dataSet);
+                }
 
-    			LinkedList_destroy(dataSets);
+                LinkedList_destroy(dataSets);
 
-    			LinkedList reports = IedConnection_getLogicalNodeDirectory(con, &error, lnRef,
-    					ACSI_CLASS_URCB);
+                LinkedList reports = IedConnection_getLogicalNodeDirectory(con, &error, lnRef,
+                        ACSI_CLASS_URCB);
 
-    			LinkedList report = LinkedList_getNext(reports);
+                LinkedList report = LinkedList_getNext(reports);
 
-    			while (report != NULL) {
-    				char* reportName = (char*) report->data;
+                while (report != NULL) {
+                    char* reportName = (char*) report->data;
 
-    				printf("    RP: %s\n", reportName);
+                    printf("    RP: %s\n", reportName);
 
-    				report = LinkedList_getNext(report);
-    			}
+                    report = LinkedList_getNext(report);
+                }
 
-    			LinkedList_destroy(reports);
+                LinkedList_destroy(reports);
 
-    			reports = IedConnection_getLogicalNodeDirectory(con, &error, lnRef,
-    			    					ACSI_CLASS_BRCB);
+                reports = IedConnection_getLogicalNodeDirectory(con, &error, lnRef,
+                        ACSI_CLASS_BRCB);
 
-				report = LinkedList_getNext(reports);
+                report = LinkedList_getNext(reports);
 
-				while (report != NULL) {
-					char* reportName = (char*) report->data;
+                while (report != NULL) {
+                    char* reportName = (char*) report->data;
 
-					printf("    BR: %s\n", reportName);
+                    printf("    BR: %s\n", reportName);
 
-					report = LinkedList_getNext(report);
-				}
+                    report = LinkedList_getNext(report);
+                }
 
-				LinkedList_destroy(reports);
+                LinkedList_destroy(reports);
 
-    			logicalNode = LinkedList_getNext(logicalNode);
-    		}
+                logicalNode = LinkedList_getNext(logicalNode);
+            }
 
-    		LinkedList_destroy(logicalNodes);
+            LinkedList_destroy(logicalNodes);
 
-    		device = LinkedList_getNext(device);
-    	}
+            device = LinkedList_getNext(device);
+        }
 
-    	LinkedList_destroy(deviceList);
+        LinkedList_destroy(deviceList);
 
         IedConnection_close(con);
     }
     else {
-    	printf("Connection failed!\n");
+        printf("Connection failed!\n");
     }
 
     IedConnection_destroy(con);
 }
-
 

@@ -47,6 +47,29 @@ BufferChain_destroy(BufferChain self)
     }
 }
 
+int /* returns the number of bytes written to the buffer */
+BufferChain_dumpToBuffer(BufferChain self, uint8_t* buffer, int bufferMaxSize)
+{
+    if (self->length > bufferMaxSize)
+        return 0;
+
+    BufferChain currentChain = self;
+
+    int currentBufferIndex = 0;
+
+    do {
+        int currentChainIndex = 0;
+        int currentPartLength = self->partLength;
+
+        while (currentChainIndex < currentPartLength)
+            buffer[currentBufferIndex++] = self->buffer[currentChainIndex++];
+
+        currentChain = currentChain->nextPart;
+    } while (currentChain != NULL);
+
+    return currentBufferIndex;
+}
+
 void
 MemoryArea_initialize(MemoryArea* self, uint8_t* memory, int size)
 {

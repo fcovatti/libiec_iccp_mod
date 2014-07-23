@@ -22,10 +22,13 @@
  */
 
 #include "iec61850_server.h"
+#include "iso_server.h"
 #include "mms_mapping.h"
 #include "control.h"
 #include "stack_config.h"
 #include "thread.h"
+
+#include "ied_server_private.h"
 
 struct sClientConnection {
     Semaphore tasksCountMutex;
@@ -95,3 +98,11 @@ ClientConnection_getPeerAddress(ClientConnection self)
     return IsoConnection_getPeerAddress(mmsConnection->isoConnection);
 }
 
+
+void*
+ClientConnection_getSecurityToken(ClientConnection self)
+{
+    MmsServerConnection* mmsConnection = (MmsServerConnection*) self->serverConnectionHandle;
+
+    return IsoConnection_getSecurityToken(mmsConnection->isoConnection);
+}

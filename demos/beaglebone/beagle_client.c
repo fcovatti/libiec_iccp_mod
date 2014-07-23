@@ -49,7 +49,6 @@ int main(int argc, char** argv) {
         ControlObjectClient controlLED4
             = ControlObjectClient_create("beagleGenericIO/GGIO1.DPCSO1", con);
 
-
         MmsValue* ctlValOn = MmsValue_newBoolean(true);
 
         MmsValue* ctlValOff = MmsValue_newBoolean(false);

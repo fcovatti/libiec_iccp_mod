@@ -24,14 +24,48 @@
 #ifndef MMS_VALUE_H_
 #define MMS_VALUE_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "libiec61850_common_api.h"
+#include "mms_common.h"
+#include "mms_types.h"
+#include "ber_integer.h"
+
 /**
  * \defgroup common_api_group libIEC61850 API common parts
  */
 /**@{*/
 
-#include "libiec61850_platform_includes.h"
-#include "mms_common.h"
-#include "mms_types.h"
+/**
+ * \defgroup MMS_VALUE MmsValue data type definition and handling functions
+ */
+/**@{*/
+
+
+typedef enum ATTRIBUTE_PACKED {
+    DATA_ACCESS_ERROR_NO_RESPONSE = -2, /* for server internal purposes only! */
+    DATA_ACCESS_ERROR_SUCCESS = -1,
+    DATA_ACCESS_ERROR_OBJECT_INVALIDATED = 0,
+    DATA_ACCESS_ERROR_HARDWARE_FAULT = 1,
+    DATA_ACCESS_ERROR_TEMPORARILY_UNAVAILABLE = 2,
+    DATA_ACCESS_ERROR_OBJECT_ACCESS_DENIED = 3,
+    DATA_ACCESS_ERROR_OBJECT_UNDEFINED = 4,
+    DATA_ACCESS_ERROR_INVALID_ADDRESS = 5,
+    DATA_ACCESS_ERROR_TYPE_UNSUPPORTED = 6,
+    DATA_ACCESS_ERROR_TYPE_INCONSISTENT = 7,
+    DATA_ACCESS_ERROR_OBJECT_ATTRIBUTE_INCONSISTENT = 8,
+    DATA_ACCESS_ERROR_OBJECT_ACCESS_UNSUPPORTED = 9,
+    DATA_ACCESS_ERROR_OBJECT_NONE_EXISTENT = 10,
+    DATA_ACCESS_ERROR_OBJECT_VALUE_INVALID = 11,
+    DATA_ACCESS_ERROR_UNKNOWN = 12
+} MmsDataAccessError;
+
+/**
+ * MmsValue - complex value type for MMS Client API
+ */
+typedef struct sMmsValue MmsValue;
 
 /*************************************************************************************
  *  Array functions
@@ -167,19 +201,65 @@ void
 MmsValue_setDouble(MmsValue* self, double newFloatValue);
 
 /**
+ * \brief Set the Int8 value of a MmsValue object.
+ *
+ * \param self MmsValue instance to operate on. Has to be of a type MMS_INTEGER.
+ * \param integer the new value to set
+ */
+void
+MmsValue_setInt8(MmsValue* value, int8_t integer);
+
+/**
+ * \brief Set the Int16 value of a MmsValue object.
+ *
+ * \param self MmsValue instance to operate on. Has to be of a type MMS_INTEGER.
+ * \param integer the new value to set
+ */
+void
+MmsValue_setInt16(MmsValue* value, int16_t integer);
+
+/**
  * \brief Set the Int32 value of a MmsValue object.
  *
  * \param self MmsValue instance to operate on. Has to be of a type MMS_INTEGER.
+ * \param integer the new value to set
  */
 void
 MmsValue_setInt32(MmsValue* self, int32_t integer);
 
+/**
+ * \brief Set the Int64 value of a MmsValue object.
+ *
+ * \param self MmsValue instance to operate on. Has to be of a type MMS_INTEGER.
+ * \param integer the new value to set
+ */
+void
+MmsValue_setInt64(MmsValue* value, int64_t integer);
+
+/**
+ * \brief Set the UInt8 value of a MmsValue object.
+ *
+ * \param self MmsValue instance to operate on. Has to be of a type MMS_UNSIGNED.
+ * \param integer the new value to set
+ */
 void
 MmsValue_setUint8(MmsValue* value, uint8_t integer);
 
+/**
+ * \brief Set the UInt16 value of a MmsValue object.
+ *
+ * \param self MmsValue instance to operate on. Has to be of a type MMS_UNSIGNED.
+ * \param integer the new value to set
+ */
 void
 MmsValue_setUint16(MmsValue* value, uint16_t integer);
 
+/**
+ * \brief Set the UInt32 value of a MmsValue object.
+ *
+ * \param self MmsValue instance to operate on. Has to be of a type MMS_UNSIGNED.
+ * \param integer the new value to set
+ */
 void
 MmsValue_setUint32(MmsValue* value, uint32_t integer);
 
@@ -247,6 +327,14 @@ MmsValue_deleteAllBitStringBits(MmsValue* self);
  */
 int
 MmsValue_getBitStringSize(MmsValue* self);
+
+/**
+ * \brief Get the number of bytes required by this bitString
+ *
+ * \param self MmsValue instance to operate on. Has to be of a type MMS_BITSTRING.
+ */
+int
+MmsValue_getBitStringByteSize(MmsValue* self);
 
 /**
  * \brief Count the number of set bits in a bit string.
@@ -321,6 +409,40 @@ uint64_t
 MmsValue_getUtcTimeInMs(MmsValue* value);
 
 /**
+ * \brief set the TimeQuality byte of the UtcTime
+ *
+ * Meaning of the bits in the timeQuality byte:
+ *
+ * bit 7 = leapSecondsKnown
+ * bit 6 = clockFailure
+ * bit 5 = clockNotSynchronized
+ * bit 0-4 = subsecond time accuracy (number of significant bits of subsecond time)
+ *
+ * \param self MmsValue instance to operate on. Has to be of a type MMS_UTCTIME.
+ *
+ * \param timeQuality the byte representing the time quality
+ */
+void
+MmsValue_setUtcTimeQuality(MmsValue* self, uint8_t timeQuality);
+
+/**
+ * \brief get the TimeQuality byte of the UtcTime
+ *
+ * Meaning of the bits in the timeQuality byte:
+ *
+ * bit 7 = leapSecondsKnown
+ * bit 6 = clockFailure
+ * bit 5 = clockNotSynchronized
+ * bit 0-4 = subsecond time accuracy (number of significant bits of subsecond time)
+ *
+ * \param self MmsValue instance to operate on. Has to be of a type MMS_UTCTIME.
+ *
+ * \return the byte representing the time quality
+ */
+uint8_t
+MmsValue_getUtcTimeQuality(MmsValue* self);
+
+/**
  * \brief Update an MmsValue object of type MMS_BINARYTIME with a millisecond time.
  *
  * \param self MmsValue instance to operate on. Has to be of a type MMS_UTCTIME.
@@ -354,6 +476,39 @@ void
 MmsValue_setOctetString(MmsValue* self, uint8_t* buf, int size);
 
 /**
+ * \brief Returns the size in bytes of an MmsValue object of type MMS_OCTET_STRING.
+ *
+ * \param self MmsValue instance to operate on. Has to be of a type MMS_OCTET_STRING.
+ *
+ * \return size in bytes
+ */
+uint16_t
+MmsValue_getOctetStringSize(MmsValue* self);
+
+/**
+ * \brief Returns the maximum size in bytes of an MmsValue object of type MMS_OCTET_STRING.
+ *
+ * Returns the maximum size if bytes of the MmsValue object of type MMS_OCTET_STRING. This
+ * is the size of the internally allocated buffer to hold the octet string data.
+ *
+ * \param self MmsValue instance to operate on. Has to be of a type MMS_OCTET_STRING.
+ *
+ * \return maximum size in bytes
+ */
+uint16_t
+MmsValue_getOctetStringMaxSize(MmsValue* self);
+
+/**
+ * \brief Returns the reference to the internally hold buffer of an MmsValue object of type MMS_OCTET_STRING.
+ *
+ * \param self MmsValue instance to operate on. Has to be of a type MMS_OCTET_STRING.
+ *
+ * \return reference to the buffer
+ */
+uint8_t*
+MmsValue_getOctetStringBuffer(MmsValue* self);
+
+/**
  * \brief Update the value of an MmsValue instance by the value of another MmsValue instance.
  *
  * Both instances should be of same time. E.g. is self is of type MMS_INTEGER then
@@ -370,7 +525,7 @@ MmsValue_update(MmsValue* self, MmsValue* source);
 /**
  * \brief Check if two instances of MmsValue have the same value.
  *
- * Both instances should be of same time. E.g. is self is of type MMS_INTEGER then
+ * Both instances should be of same type. E.g. is self is of type MMS_INTEGER then
  * source has also to be of type MMS_INTEGER. Otherwise the call will return false.
  *
  * \param self MmsValue instance to operate on.
@@ -380,6 +535,21 @@ MmsValue_update(MmsValue* self, MmsValue* source);
  */
 bool
 MmsValue_equals(MmsValue* self, MmsValue* otherValue);
+
+/**
+ * \brief Check if two (complex) instances of MmsValue have the same type.
+ *
+ * This function will test if the two values are of the same type. The function
+ * will return true only if all child instances in the MmsValue instance tree are
+ * also of equal type.
+ *
+ * \param self MmsValue instance to operate on.
+ * \param otherValue MmsValue that is used to test
+ *
+ * \return true if both instances and all their children are of the same type.
+ */
+bool
+MmsValue_equalTypes(MmsValue* self, MmsValue* otherValue);
 
 /*************************************************************************************
  * Constructors and destructors
@@ -427,6 +597,9 @@ MmsValue*
 MmsValue_newDefaultValue(MmsVariableSpecification* typeSpec);
 
 MmsValue*
+MmsValue_newIntegerFromInt8(int8_t integer);
+
+MmsValue*
 MmsValue_newIntegerFromInt16(int16_t integer);
 
 MmsValue*
@@ -458,6 +631,32 @@ MmsValue*
 MmsValue_clone(MmsValue* self);
 
 /**
+ * \brief Create a (deep) copy of an MmsValue instance in a user provided buffer
+ *
+ * This operation copies the give MmsValue instance to a user provided buffer.
+ *
+ * \param self the MmsValue instance that will be cloned
+ * \param destinationAddress the start address of the user provided buffer
+ *
+ * \return an MmsValue instance that is an exact copy of the given instance.
+ */
+uint8_t*
+MmsValue_cloneToBuffer(MmsValue* self, uint8_t* destinationAddress);
+
+/**
+ * \brief Determine the required amount of bytes by a clone.
+ *
+ * This function is intended to be used to determine the buffer size of a clone operation
+ * (MmsValue_cloneToBuffer) in advance.
+ *
+ * \param self the MmsValue instance
+ *
+ * \return the number of bytes required by a clone
+ */
+int
+MmsValue_getSizeInMemory(MmsValue* self);
+
+/**
  * \brief Delete an MmsValue instance.
  *
  * This operation frees all dynamically allocated memory of the MmsValue instance.
@@ -468,6 +667,21 @@ MmsValue_clone(MmsValue* self);
  */
 void
 MmsValue_delete(MmsValue* self);
+
+/**
+ * \brief Delete an MmsValue instance.
+ *
+ * This operation frees all dynamically allocated memory of the MmsValue instance.
+ * If the instance is of type MMS_STRUCTURE or MMS_ARRAY all child elements will
+ * be deleted too.
+ *
+ * NOTE: this functions only frees the instance if deleteValue field = 0!
+ *
+ *
+ * \param self the MmsValue instance to be deleted.
+ */
+void
+MmsValue_deleteConditional(MmsValue* value);
 
 /**
  * \brief Delete an MmsValue instance if the provided pointer is not NULL
@@ -545,6 +759,9 @@ MmsValue_newUtcTimeByMsTime(uint64_t timeval);
 void
 MmsValue_setDeletable(MmsValue* self);
 
+void
+MmsValue_setDeletableRecursive(MmsValue* value);
+
 /**
  * \brief Check if the MmsValue instance has the deletable flag set.
  *
@@ -579,6 +796,25 @@ MmsValue_getType(MmsValue* self);
 MmsValue*
 MmsValue_getSubElement(MmsValue* self, MmsVariableSpecification* varSpec, char* mmsPath);
 
+/**
+ * \brief return the value type as a human readable string
+ *
+ * \param self the MmsValue instance
+ *
+ * \return the value type as a human readable string
+ */
+char*
+MmsValue_getTypeString(MmsValue* self);
+
+char*
+MmsValue_printToBuffer(MmsValue* self, char* buffer, int bufferSize);
+
 /**@}*/
+
+/**@}*/
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* MMS_VALUE_H_ */

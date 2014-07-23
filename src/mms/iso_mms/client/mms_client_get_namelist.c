@@ -56,14 +56,12 @@ mmsClient_createMmsGetNameListRequestVMDspecific(long invokeId, ByteBuffer* writ
 	request->objectClass.present = ObjectClass_PR_basicObjectClass;
 
 	asn_long2INTEGER(&request->objectClass.choice.basicObjectClass,
-			ObjectClass__basicObjectClass_namedVariable);
+			ObjectClass__basicObjectClass_domain);
 
 	asn_enc_rval_t rval;
 
 	rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
 		(asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
-
-	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
 
 	asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
 
@@ -103,8 +101,6 @@ mmsClient_createMmsGetNameListRequestAssociationSpecific(long invokeId, ByteBuff
 
 	rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
 		(asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
-
-	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
 
 	asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
 
@@ -201,7 +197,7 @@ exit_error:
 }
 
 int
-mmsClient_createGetNameListRequestDomainSpecific(long invokeId, char* domainName,
+mmsClient_createGetNameListRequestDomainOrVMDSpecific(long invokeId, char* domainName,
 		ByteBuffer* writeBuffer, MmsObjectClass objectClass, char* continueAfter)
 {
 	MmsPdu_t* mmsPdu = mmsClient_createConfirmedRequestPdu(invokeId);
@@ -222,10 +218,15 @@ mmsClient_createGetNameListRequestDomainSpecific(long invokeId, char* domainName
 		request->continueAfter = NULL;
 
 
+	if (domainName != NULL) {
+        request->objectScope.present = GetNameListRequest__objectScope_PR_domainSpecific;
+        request->objectScope.choice.domainSpecific.buf = (uint8_t*) domainName;
+        request->objectScope.choice.domainSpecific.size = strlen(domainName);
+	}
+	else {
+	    request->objectScope.present = GetNameListRequest__objectScope_PR_vmdSpecific;
+	}
 
-	request->objectScope.present = GetNameListRequest__objectScope_PR_domainSpecific;
-	request->objectScope.choice.domainSpecific.buf = (uint8_t*) domainName;
-	request->objectScope.choice.domainSpecific.size = strlen(domainName);
 	request->objectClass.present = ObjectClass_PR_basicObjectClass;
 
 	if (objectClass == MMS_NAMED_VARIABLE)
@@ -239,8 +240,6 @@ mmsClient_createGetNameListRequestDomainSpecific(long invokeId, char* domainName
 
 	rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
 		(asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
-
-	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
 
 	request->objectScope.choice.domainSpecific.buf = 0;
 	request->objectScope.choice.domainSpecific.size = 0;

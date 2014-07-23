@@ -1,7 +1,7 @@
 /*
  *  iso_server.c
  *
- *  Copyright 2013 Michael Zillgith
+ *  Copyright 2013, 2014 Michael Zillgith
  *
  *  This file is part of libIEC61850.
  *
@@ -41,6 +41,10 @@
 
 #include "iso_server_private.h"
 
+#ifndef CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS
+#define CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS 5
+#endif
+
 #define TCP_PORT 102
 #define SECURE_TCP_PORT 3782
 #define BACKLOG 10
@@ -49,23 +53,88 @@ struct sIsoServer {
     IsoServerState state;
     ConnectionIndicationHandler connectionHandler;
     void* connectionHandlerParameter;
-    AcseAuthenticationParameter authParameter;
+
+    AcseAuthenticator authenticator;
+    void* authenticatorParameter;
+
     Thread serverThread;
     Socket serverSocket;
     int tcpPort;
     char* localIpAddress;
 
+#if (CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS == -1)
     LinkedList openClientConnections;
+#else
+    IsoConnection* openClientConnections;
+#endif
+
+    Semaphore userLock;
+
     Semaphore connectionCounterMutex;
     int connectionCounter;
 };
 
-void
-private_IsoServer_increaseConnectionCounter(IsoServer self);
+static void
+addClientConnection(IsoServer self, IsoConnection connection)
+{
 
-void
-private_IsoServer_decreaseConnectionCounter(IsoServer self);
+#if (CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS == -1)
+    LinkedList_add(self->openClientConnections, connection);
+#else
+    int i;
 
+    for (i = 0; i < CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS; i++) {
+        if (self->openClientConnections[i] == NULL) {
+            self->openClientConnections[i] = connection;
+            break;
+        }
+    }
+#endif
+}
+
+static void
+removeClientConnection(IsoServer self, IsoConnection connection)
+{
+#if (CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS == -1)
+    LinkedList_remove(self->openClientConnections, connection);
+#else
+    int i;
+
+    for (i = 0; i < CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS; i++) {
+        if (self->openClientConnections[i] == connection) {
+            self->openClientConnections[i] = NULL;
+            break;
+        }
+    }
+#endif
+}
+
+static void
+closeAllOpenClientConnections(IsoServer self)
+{
+
+#if (CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS == -1)
+    LinkedList openConnection = LinkedList_getNext(self->openClientConnections);
+    while (openConnection != NULL) {
+        IsoConnection isoConnection = (IsoConnection) openConnection->data;
+
+        IsoConnection_close(isoConnection);
+
+        openConnection = LinkedList_getNext(openConnection);
+    }
+#else
+    int i;
+
+    for (i = 0; i < CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS; i++) {
+        if (self->openClientConnections[i] != NULL) {
+
+            IsoConnection_close(self->openClientConnections[i]);
+
+            break;
+        }
+    }
+#endif
+}
 
 static void
 isoServerThread(void* isoServerParam)
@@ -94,14 +163,26 @@ isoServerThread(void* isoServerParam)
     {
 
         if ((connectionSocket = ServerSocket_accept((ServerSocket) self->serverSocket)) == NULL) {
-            break;;
+            break;
         }
         else {
+
+#if (CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS != -1)
+            if (private_IsoServer_getConnectionCounter(self) >= CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS) {
+                if (DEBUG_ISO_SERVER)
+                    printf("ISO_SERVER: maximum number of connections reached -> reject connection attempt.\n");
+
+                Socket_destroy(connectionSocket);
+                continue;
+            }
+#endif
+
             IsoConnection isoConnection = IsoConnection_create(connectionSocket, self);
 
             private_IsoServer_increaseConnectionCounter(self);
 
-            LinkedList_add(self->openClientConnections, isoConnection);
+            addClientConnection(self, isoConnection);
+
 
             self->connectionHandler(ISO_CONNECTION_OPENED, self->connectionHandlerParameter,
                     isoConnection);
@@ -128,7 +209,12 @@ IsoServer_create()
     self->state = ISO_SVR_STATE_IDLE;
     self->tcpPort = TCP_PORT;
 
+#if (CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS == -1)
     self->openClientConnections = LinkedList_create();
+#else
+    self->openClientConnections = (IsoConnection*)
+            calloc(CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS, sizeof(IsoConnection));
+#endif
 
     self->connectionCounterMutex = Semaphore_create(1);
     self->connectionCounter = 0;
@@ -155,15 +241,22 @@ IsoServer_getState(IsoServer self)
 }
 
 void
-IsoServer_setAuthenticationParameter(IsoServer self, AcseAuthenticationParameter authParameter)
+IsoServer_setAuthenticator(IsoServer self, AcseAuthenticator authenticator, void* authenticatorParameter)
 {
-    self->authParameter = authParameter;
+    self->authenticator = authenticator;
+    self->authenticatorParameter = authenticatorParameter;
 }
 
-AcseAuthenticationParameter
-IsoServer_getAuthenticationParameter(IsoServer self)
+AcseAuthenticator
+IsoServer_getAuthenticator(IsoServer self)
 {
-    return self->authParameter;
+    return self->authenticator;
+}
+
+void*
+IsoServer_getAuthenticatorParameter(IsoServer self)
+{
+    return self->authenticatorParameter;
 }
 
 void
@@ -193,16 +286,7 @@ IsoServer_stopListening(IsoServer self)
     if (self->serverThread != NULL)
         Thread_destroy(self->serverThread);
 
-    /* Close all open client connections */
-    LinkedList openConnection = LinkedList_getNext(self->openClientConnections);
-
-    while (openConnection != NULL) {
-        IsoConnection isoConnection = (IsoConnection) openConnection->data;
-
-        IsoConnection_close(isoConnection);
-
-        openConnection = LinkedList_getNext(openConnection);
-    }
+    closeAllOpenClientConnections(self);
 
     /* Wait for connection threads to finish */
     while (private_IsoServer_getConnectionCounter(self) > 0)
@@ -220,7 +304,7 @@ IsoServer_closeConnection(IsoServer self, IsoConnection isoConnection)
                 isoConnection);
     }
 
-    LinkedList_remove(self->openClientConnections, isoConnection);
+    removeClientConnection(self, isoConnection);
 }
 
 void
@@ -237,7 +321,11 @@ IsoServer_destroy(IsoServer self)
     if (self->state == ISO_SVR_STATE_RUNNING)
         IsoServer_stopListening(self);
 
+#if (CONFIG_MAXIMUM_TCP_CLIENT_CONNECTIONS == -1)
     LinkedList_destroy(self->openClientConnections);
+#else
+    free(self->openClientConnections);
+#endif
 
     Semaphore_destroy(self->connectionCounterMutex);
 
@@ -276,4 +364,24 @@ private_IsoServer_getConnectionCounter(IsoServer self)
     Semaphore_post(self->connectionCounterMutex);
 
     return connectionCounter;
+}
+
+void
+IsoServer_setUserLock(IsoServer self, Semaphore userLock)
+{
+    self->userLock = userLock;
+}
+
+void
+IsoServer_userLock(IsoServer self)
+{
+    if (self->userLock != NULL)
+        Semaphore_wait(self->userLock);
+}
+
+void
+IsoServer_userUnlock(IsoServer self)
+{
+    if (self->userLock != NULL)
+        Semaphore_post(self->userLock);
 }

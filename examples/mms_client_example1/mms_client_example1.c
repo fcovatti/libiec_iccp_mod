@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "mms_client_connection.h"
+#include "thread.h"
 
 int main(int argc, char** argv) {
 
@@ -36,6 +37,11 @@ int main(int argc, char** argv) {
 
 	if (MmsConnection_connect(con, &mmsError, "localhost", 102)) {
 		// add application code here
+
+        Thread_sleep(1000);
+
+	    printf("Send abort\n");
+	    MmsConnection_abort(con, &mmsError);
 	}
 	else
 	    printf("Connect to server failed!\n");

@@ -78,7 +78,7 @@ int main(int argc, char** argv) {
 
         Thread_sleep(1000);
 
-       // IedConnection_deleteDataSet(con, &error, "simpleIOGenericIO/LLN0.AnalogueValues");
+        IedConnection_deleteDataSet(con, &error, "simpleIOGenericIO/LLN0.AnalogueValues");
 
         IedConnection_close(con);
     }

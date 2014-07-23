@@ -24,13 +24,16 @@
 #ifndef MMS_NAMED_VARIABLE_LIST_H_
 #define MMS_NAMED_VARIABLE_LIST_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** \addtogroup mms_server_api_group
  *  @{
  */
 
-#include "libiec61850_platform_includes.h"
+#include "libiec61850_common_api.h"
 #include "linked_list.h"
-#include "string_utilities.h"
 #include "mms_common.h"
 
 struct sMmsNamedVariableList {
@@ -70,5 +73,9 @@ void
 MmsNamedVariableList_destroy(MmsNamedVariableList self);
 
 /**@}*/
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* MMS_NAMED_VARIABLE_LIST_H_ */

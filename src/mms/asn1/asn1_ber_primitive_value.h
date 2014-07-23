@@ -24,11 +24,16 @@
 #ifndef ASN1_BER_PRIMITIVE_VALUE_H_
 #define ASN1_BER_PRIMITIVE_VALUE_H_
 
-#include "libiec61850_platform_includes.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-typedef struct {
-	int size;
-	int maxSize;
+
+#include "libiec61850_common_api.h"
+
+typedef struct ATTRIBUTE_PACKED {
+	uint8_t size;
+	uint8_t maxSize;
 	uint8_t* octets;
 } Asn1PrimitiveValue;
 
@@ -49,5 +54,9 @@ Asn1PrimitivaValue_compare(Asn1PrimitiveValue* self, Asn1PrimitiveValue* otherVa
 
 void
 Asn1PrimitiveValue_destroy(Asn1PrimitiveValue* self);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ASN1_BER_PRIMITIVE_VALUE_H_ */

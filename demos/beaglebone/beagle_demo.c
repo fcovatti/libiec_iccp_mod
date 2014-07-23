@@ -1,24 +1,8 @@
 /*
  *  beagle_demo.c
  *
- *  Copyright 2013 Michael Zillgith
+ *  This demo shows how to connect the libiec61850 server stack to a real device.
  *
- *  This file is part of libIEC61850.
- *
- *  libIEC61850 is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  libIEC61850 is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with libIEC61850.  If not, see <http://www.gnu.org/licenses/>.
- *
- *  See COPYING file for the complete license text.
  */
 
 #include "iec61850_server.h"
@@ -42,6 +26,8 @@ static IedServer iedServer = NULL;
 
 static bool automaticOperationMode = true;
 static ClientConnection controllingClient = NULL;
+
+static uint32_t dpcState = 0;
 
 void sigint_handler(int signalId)
 {
@@ -67,7 +53,7 @@ connectionIndicationHandler(IedServer server, ClientConnection connection, bool 
     }
 }
 
-static bool
+static CheckHandlerResult
 performCheckHandler(void* parameter, MmsValue* ctlVal, bool test, bool interlockCheck, ClientConnection connection)
 {
     if (controllingClient == NULL) {
@@ -78,96 +64,85 @@ performCheckHandler(void* parameter, MmsValue* ctlVal, bool test, bool interlock
 
     /* If there is already another client that controls the device reject the control attempt */
     if (controllingClient == connection)
-        return true;
+        return CONTROL_ACCEPTED;
     else
-        return false;
+        return CONTROL_TEMPORARILY_UNAVAILABLE;
 }
 
 void
-updateLED1stVal(MmsValue* value, MmsValue* timeStamp) {
-    if (MmsValue_getBoolean(value))
-        switchLED(LED1, 1);
-    else
-        switchLED(LED1, 0);
+updateLED1stVal(bool newLedState, uint64_t timeStamp) {
+    switchLED(LED1, newLedState);
 
-    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO1_stVal, value);
-    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO1_t, timeStamp);
+    IedServer_updateBooleanAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO1_stVal, newLedState);
+    IedServer_updateQuality(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO1_q, QUALITY_VALIDITY_GOOD | QUALITY_SOURCE_SUBSTITUTED);
+    IedServer_updateUTCTimeAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO1_t, timeStamp);
 }
 
 void
-updateLED2stVal(MmsValue* value, MmsValue* timeStamp) {
-    if (MmsValue_getBoolean(value))
-        switchLED(LED2, 1);
-    else
-        switchLED(LED2, 0);
+updateLED2stVal(bool newLedState, uint64_t timeStamp) {
+    switchLED(LED2, newLedState);
 
-    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO2_stVal, value);
-    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO2_t, timeStamp);
+    IedServer_updateBooleanAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO2_stVal, newLedState);
+    IedServer_updateQuality(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO2_q, QUALITY_VALIDITY_QUESTIONABLE | QUALITY_DETAIL_OSCILLATORY);
+    IedServer_updateUTCTimeAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO2_t, timeStamp);
 }
 
 void
-updateLED3stVal(MmsValue* value, MmsValue* timeStamp) {
-    if (MmsValue_getBoolean(value))
-        switchLED(LED3, 1);
-    else
-        switchLED(LED3, 0);
+updateLED3stVal(bool newLedState, uint64_t timeStamp) {
+    switchLED(LED3, newLedState);
 
-    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO3_stVal, value);
-    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO3_t, timeStamp);
+    IedServer_updateBooleanAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO3_stVal, newLedState);
+    IedServer_updateQuality(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO3_q, QUALITY_VALIDITY_GOOD);
+    IedServer_updateUTCTimeAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO3_t, timeStamp);
 }
 
-void
-controlHandler(void* parameter, MmsValue* value, bool test)
+bool
+controlHandlerForBinaryOutput(void* parameter, MmsValue* value, bool test)
 {
-    MmsValue* timeStamp = MmsValue_newUtcTimeByMsTime(Hal_getTimeInMs());
+    if (test)
+        return true;
 
-    if (parameter == IEDMODEL_GenericIO_GGIO1_SPCSO1) {
-        if (MmsValue_getType(value) == MMS_BOOLEAN) {
-            updateLED1stVal(value, timeStamp);
-        }
+    if (MmsValue_getType(value) != MMS_BOOLEAN)
+        return false;
 
-    }
+    uint64_t timeStamp = Hal_getTimeInMs();
 
-    if (parameter == IEDMODEL_GenericIO_GGIO1_SPCSO2) {
-        if (MmsValue_getType(value) == MMS_BOOLEAN) {
-            updateLED2stVal(value, timeStamp);
-        }
-    }
+    bool newState = MmsValue_getBoolean(value);
 
-    if (parameter == IEDMODEL_GenericIO_GGIO1_SPCSO3) {
-        if (MmsValue_getType(value), MMS_BOOLEAN) {
-           updateLED3stVal(value, timeStamp);
-        }
-    }
+    if (parameter == IEDMODEL_GenericIO_GGIO1_SPCSO1)
+        updateLED1stVal(newState, timeStamp);
+
+    if (parameter == IEDMODEL_GenericIO_GGIO1_SPCSO2)
+        updateLED2stVal(newState, timeStamp);
+
+    if (parameter == IEDMODEL_GenericIO_GGIO1_SPCSO3)
+       updateLED3stVal(newState, timeStamp);
 
     if (parameter == IEDMODEL_GenericIO_GGIO1_DPCSO1) { /* example for Double Point Control - DPC */
-        if (MmsValue_getType(value) == MMS_BOOLEAN) {
 
-            MmsValue* stVal = IedServer_getAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_DPCSO1_stVal);
-            MmsValue_setBitStringFromInteger(stVal, 0); /* DPC_STATE_INTERMEDIATE */
+        dpcState = 0; /* DPC_STATE_INTERMEDIATE */
+        IedServer_updateBitStringAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_DPCSO1_stVal, dpcState);
+        IedServer_updateUTCTimeAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_DPCSO1_t, timeStamp);
 
-            IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_DPCSO1_stVal, stVal);
-            IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_DPCSO1_t, timeStamp);
 
-            if (MmsValue_getBoolean(value)) {
-                flashLED(LED4);
-                Thread_sleep(3000);
-                switchLED(LED4, 1);
-                MmsValue_setBitStringFromInteger(stVal, 2); /* DPC_STATE_ON */
-            }
-            else {
-                flashLED(LED4);
-                Thread_sleep(3000);
-                switchLED(LED4, 0);
-                MmsValue_setBitStringFromInteger(stVal, 1); /* DPC_STATE_OFF */
-            }
-
-            IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_DPCSO1_stVal, stVal);
-            IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_DPCSO1_t, timeStamp);
+        if (newState) {
+            flashLED(LED4);
+            Thread_sleep(3000);
+            switchLED(LED4, 1);
+            dpcState = 2; /* DPC_STATE_ON */
         }
+        else {
+            flashLED(LED4);
+            Thread_sleep(3000);
+            switchLED(LED4, 0);
+            dpcState = 1; /* DPC_STATE_OFF */
+        }
+
+        IedServer_updateBitStringAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_DPCSO1_stVal, dpcState);
+        IedServer_updateUTCTimeAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_DPCSO1_t, timeStamp);
     }
 
-    MmsValue_delete(timeStamp);
+    return true;
 }
 
 
@@ -183,25 +158,25 @@ int main(int argc, char** argv) {
 	IedServer_setPerformCheckHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO1,
 	        (ControlPerformCheckHandler) performCheckHandler, IEDMODEL_GenericIO_GGIO1_SPCSO1);
 
-	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO1, (ControlHandler) controlHandler,
+	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO1, (ControlHandler) controlHandlerForBinaryOutput,
 	        IEDMODEL_GenericIO_GGIO1_SPCSO1);
 
     IedServer_setPerformCheckHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO2,
             (ControlPerformCheckHandler) performCheckHandler, IEDMODEL_GenericIO_GGIO1_SPCSO2);
 
-	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO2, (ControlHandler) controlHandler,
+	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO2, (ControlHandler) controlHandlerForBinaryOutput,
 	            IEDMODEL_GenericIO_GGIO1_SPCSO2);
 
     IedServer_setPerformCheckHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO3,
             (ControlPerformCheckHandler) performCheckHandler, IEDMODEL_GenericIO_GGIO1_SPCSO3);
 
-	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO3, (ControlHandler) controlHandler,
+	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_SPCSO3, (ControlHandler) controlHandlerForBinaryOutput,
 	            IEDMODEL_GenericIO_GGIO1_SPCSO3);
 
     IedServer_setPerformCheckHandler(iedServer, IEDMODEL_GenericIO_GGIO1_DPCSO1,
             (ControlPerformCheckHandler) performCheckHandler, IEDMODEL_GenericIO_GGIO1_DPCSO1);
 
-	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_DPCSO1, (ControlHandler) controlHandler,
+	IedServer_setControlHandler(iedServer, IEDMODEL_GenericIO_GGIO1_DPCSO1, (ControlHandler) controlHandlerForBinaryOutput,
 	            IEDMODEL_GenericIO_GGIO1_DPCSO1);
 
 
@@ -223,56 +198,46 @@ int main(int argc, char** argv) {
 
 	signal(SIGINT, sigint_handler);
 
-	MmsValue* timestamp = MmsValue_newUtcTime(0);
-
 	float t = 0.f;
 
-	MmsValue* an1 = MmsValue_newFloat(0.f);
-	MmsValue* an2 = MmsValue_newFloat(0.f);
-	MmsValue* an3 = MmsValue_newFloat(0.f);
-	MmsValue* an4 = MmsValue_newFloat(0.f);
+	bool ledStateValue = false;
 
-	MmsValue* ledStVal = MmsValue_newBoolean(false);
 	uint64_t nextLedToggleTime = Hal_getTimeInMs() + 1000;
 
 	while (running) {
 	    uint64_t currentTime = Hal_getTimeInMs();
 
-	    MmsValue_setUtcTimeMs(timestamp, currentTime);
-
 	    if (automaticOperationMode) {
 	        if (nextLedToggleTime <= currentTime) {
 	            nextLedToggleTime = currentTime + 1000;
 
-	            if (MmsValue_getBoolean(ledStVal))
-	                MmsValue_setBoolean(ledStVal, false);
-	            else
-	                MmsValue_setBoolean(ledStVal, true);
+	            ledStateValue = !ledStateValue;
 
-	            updateLED1stVal(ledStVal, timestamp);
-	            updateLED2stVal(ledStVal, timestamp);
-	            updateLED3stVal(ledStVal, timestamp);
+	            updateLED1stVal(ledStateValue, currentTime);
+	            updateLED2stVal(ledStateValue, currentTime);
+	            updateLED3stVal(ledStateValue, currentTime);
 	        }
 	    }
 
-
 	    t += 0.1f;
-
-	    MmsValue_setFloat(an1, sinf(t));
-	    MmsValue_setFloat(an2, sinf(t + 1.f));
-	    MmsValue_setFloat(an3, sinf(t + 2.f));
-	    MmsValue_setFloat(an4, sinf(t + 3.f));
 
 	    IedServer_lockDataModel(iedServer);
 
-	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn1_mag_f, an1);
-	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn1_t, timestamp);
-	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn2_mag_f, an2);
-	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn2_t, timestamp);
-	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn3_mag_f, an3);
-	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn3_t, timestamp);
-	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn4_mag_f, an4);
-	    IedServer_updateAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn4_t, timestamp);
+	    IedServer_updateFloatAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn1_mag_f, sinf(t));
+	    IedServer_updateQuality(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn1_q, QUALITY_VALIDITY_GOOD);
+	    IedServer_updateUTCTimeAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn1_t, currentTime);
+
+	    IedServer_updateFloatAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn2_mag_f, sinf(t + 1.f));
+	    IedServer_updateQuality(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn2_q, QUALITY_VALIDITY_GOOD);
+	    IedServer_updateUTCTimeAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn2_t, currentTime);
+
+        IedServer_updateFloatAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn3_mag_f, sinf(t + 2.f));
+	    IedServer_updateQuality(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn3_q, QUALITY_VALIDITY_GOOD);
+	    IedServer_updateUTCTimeAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn3_t, currentTime);
+
+        IedServer_updateFloatAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn4_mag_f, sinf(t + 3.f));
+	    IedServer_updateQuality(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn4_q, QUALITY_VALIDITY_GOOD);
+	    IedServer_updateUTCTimeAttributeValue(iedServer, IEDMODEL_GenericIO_GGIO1_AnIn4_t, currentTime);
 
 	    IedServer_unlockDataModel(iedServer);
 
@@ -283,12 +248,5 @@ int main(int argc, char** argv) {
 	IedServer_stop(iedServer);
 
 	/* Cleanup - free all resources */
-	MmsValue_delete(an1);
-	MmsValue_delete(an2);
-	MmsValue_delete(an3);
-	MmsValue_delete(an4);
-	MmsValue_delete(ledStVal);
-	MmsValue_delete(timestamp);
-
 	IedServer_destroy(iedServer);
 } /* main() */

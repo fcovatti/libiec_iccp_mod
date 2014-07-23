@@ -24,6 +24,11 @@
 #ifndef ISO_SERVER_PRIVATE_H_
 #define ISO_SERVER_PRIVATE_H_
 
+#include "socket.h"
+
+IsoConnection
+IsoConnection_create(Socket socket, IsoServer isoServer);
+
 void
 private_IsoServer_increaseConnectionCounter(IsoServer self);
 
@@ -32,5 +37,17 @@ private_IsoServer_decreaseConnectionCounter(IsoServer self);
 
 int
 private_IsoServer_getConnectionCounter(IsoServer self);
+
+/**
+ * \brief User provided lock that will be called when higher layer (MMS) is called
+ */
+void
+IsoServer_setUserLock(IsoServer self, Semaphore userLock);
+
+void
+IsoServer_userLock(IsoServer self);
+
+void
+IsoServer_userUnlock(IsoServer self);
 
 #endif /* ISO_SERVER_PRIVATE_H_ */

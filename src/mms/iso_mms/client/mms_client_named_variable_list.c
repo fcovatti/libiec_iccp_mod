@@ -63,12 +63,8 @@ mmsClient_createDeleteNamedVariableListRequest(long invokeId, ByteBuffer* writeB
 	request->scopeOfDelete = (INTEGER_t*) calloc(1, sizeof(INTEGER_t));
 	asn_long2INTEGER(request->scopeOfDelete, DeleteNamedVariableListRequest__scopeOfDelete_specific);
 
-	asn_enc_rval_t rval;
-
-	rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
+    der_encode(&asn_DEF_MmsPdu, mmsPdu,
 			(asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
-
-	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
 
 	asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
 }
@@ -104,28 +100,21 @@ mmsClient_createDeleteAssociationSpecificNamedVariableListRequest(
 	request->scopeOfDelete = (INTEGER_t*) calloc(1, sizeof(INTEGER_t));
 	asn_long2INTEGER(request->scopeOfDelete, DeleteNamedVariableListRequest__scopeOfDelete_specific);
 
-	asn_enc_rval_t rval;
-
-	rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
-	            (asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
-
-	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
+	der_encode(&asn_DEF_MmsPdu, mmsPdu,
+	      (asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
 
 	asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
 }
 
-MmsIndication
+bool
 mmsClient_parseDeleteNamedVariableListResponse(ByteBuffer* message, uint32_t* invokeId)
 {
 	MmsPdu_t* mmsPdu = 0;
 
-	MmsIndication indication = MMS_ERROR;
+	bool retVal = false;
 
-	asn_dec_rval_t rval;
-
-	rval = ber_decode(NULL, &asn_DEF_MmsPdu,
+	asn_dec_rval_t rval = ber_decode(NULL, &asn_DEF_MmsPdu,
 			(void**) &mmsPdu, ByteBuffer_getBuffer(message), ByteBuffer_getSize(message));
-
 
 	if (rval.code == RC_OK) {
 		if (mmsPdu->present == MmsPdu_PR_confirmedResponsePdu) {
@@ -144,14 +133,14 @@ mmsClient_parseDeleteNamedVariableListResponse(ByteBuffer* message, uint32_t* in
 				asn_INTEGER2long(&(response->numberDeleted), &numberDeleted);
 
 				if (numberDeleted == 1)
-					indication = MMS_OK;
+					retVal = true;
 			}
 		}
 	}
 
 	asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
 
-	return indication;
+	return retVal;
 }
 
 
@@ -178,9 +167,30 @@ mmsClient_createGetNamedVariableListAttributesRequest(uint32_t invokeId, ByteBuf
 	der_encode(&asn_DEF_MmsPdu, mmsPdu,
 			(asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
 
-	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
-
 	asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
+}
+
+void
+mmsClient_createGetNamedVariableListAttributesRequestAssociationSpecific(uint32_t invokeId,
+        ByteBuffer* writeBuffer, char* listNameId)
+{
+    MmsPdu_t* mmsPdu = mmsClient_createConfirmedRequestPdu(invokeId);
+
+    mmsPdu->choice.confirmedRequestPdu.confirmedServiceRequest.present =
+                ConfirmedServiceRequest_PR_getNamedVariableListAttributes;
+
+    GetNamedVariableListAttributesRequest_t* request =
+            &(mmsPdu->choice.confirmedRequestPdu.confirmedServiceRequest.choice.getNamedVariableListAttributes);
+
+    request->present = ObjectName_PR_aaspecific;
+
+    request->choice.aaspecific.size = strlen(listNameId);
+    request->choice.aaspecific.buf = (uint8_t*) copyString(listNameId);
+
+    der_encode(&asn_DEF_MmsPdu, mmsPdu,
+            (asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
+
+    asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
 }
 
 static LinkedList /* <MmsVariableAccessSpecification*> */
@@ -195,10 +205,6 @@ parseNamedVariableAttributes(GetNamedVariableListAttributesResponse_t* response,
 	LinkedList attributes = LinkedList_create();
 
 	for (i = 0; i < attributesCount; i++) {
-
-
-		//TODO add checks
-
 	    char* domainId = mmsMsg_createStringFromAsnIdentifier(response->listOfVariable.list.array[i]->
 	            variableSpecification.choice.name.choice.domainspecific.domainId);
 
@@ -221,9 +227,7 @@ mmsClient_parseGetNamedVariableListAttributesResponse(ByteBuffer* message, uint3
 
 	LinkedList attributes = NULL;
 
-	asn_dec_rval_t rval;
-
-	rval = ber_decode(NULL, &asn_DEF_MmsPdu,
+	asn_dec_rval_t rval = ber_decode(NULL, &asn_DEF_MmsPdu,
 			(void**) &mmsPdu, ByteBuffer_getBuffer(message), ByteBuffer_getSize(message));
 
 
@@ -303,7 +307,9 @@ mmsClient_createDefineNamedVariableListRequest(
 				VariableSpecification_PR_name;
 
 		request->listOfVariable.list.array[i]->variableSpecification.choice.name.present =
-			ObjectName_PR_domainspecific;
+				ObjectName_PR_domainspecific;
+
+
 		if (variableSpec->arrayIndex == 0) {
 
 			request->listOfVariable.list.array[i]->variableSpecification.choice.name.present =	ObjectName_PR_vmdspecific;
@@ -312,10 +318,7 @@ mmsClient_createDefineNamedVariableListRequest(
 
 			request->listOfVariable.list.array[i]->variableSpecification.choice.name.choice.vmdspecific.size = strlen (variableSpec->itemId);
 
-		}	else {	
-			request->listOfVariable.list.array[i]->variableSpecification.choice.name.present =
-				ObjectName_PR_domainspecific;
-
+		}else {	
 			request->listOfVariable.list.array[i]->variableSpecification.choice.name.choice.
 				domainspecific.domainId.size = strlen(variableSpec->domainId);
 
@@ -387,19 +390,14 @@ mmsClient_createDefineNamedVariableListRequest(
 	der_encode(&asn_DEF_MmsPdu, mmsPdu,
 		(asn_app_consume_bytes_f*) mmsClient_write_out, (void*) writeBuffer);
 
-	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
-
 	asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
 }
 
-MmsIndication
+bool
 mmsClient_parseDefineNamedVariableResponse(ByteBuffer* message, uint32_t* invokeId)
 {
 	MmsPdu_t* mmsPdu = 0;
-	MmsIndication retVal =  MMS_ERROR;
-
-	MmsValue* valueList = NULL;
-	MmsValue* value = NULL;
+	bool retVal =  false;
 
 	asn_dec_rval_t rval;
 
@@ -414,7 +412,7 @@ mmsClient_parseDefineNamedVariableResponse(ByteBuffer* message, uint32_t* invoke
 
 			if (mmsPdu->choice.confirmedResponsePdu.confirmedServiceResponse.present ==
 					ConfirmedServiceResponse_PR_defineNamedVariableList)
-				retVal = MMS_OK;
+				retVal = true;
 		}
 	}
 

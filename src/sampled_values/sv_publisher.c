@@ -21,8 +21,8 @@
  *  See COPYING file for the complete license text.
  */
 
-#include "libiec61850_platform_includes.h"
 #include "stack_config.h"
+#include "libiec61850_platform_includes.h"
 
 #define CONFIG_SV_DEFAULT_DST_ADDRESS CONFIG_GOOSE_DEFAULT_DST_ADDRESS
 
@@ -148,18 +148,18 @@ encodeUInt16WithTLFixedSize(uint8_t tag, uint16_t value, uint8_t* buffer, int bu
     buffer[bufPos++] = tag;
     buffer[bufPos++] = 2;
 
-    if (ORDER_LITTLE_ENDIAN) {
-        buffer[bufPos++] = valueArray[1];
-        buffer[bufPos++] = valueArray[0];
-    }
-    else {
-        buffer[bufPos++] = valueArray[0];
-        buffer[bufPos++] = valueArray[1];
-    }
+#if (ORDER_LITTLE_ENDIAN == 1)
+    buffer[bufPos++] = valueArray[1];
+    buffer[bufPos++] = valueArray[0];
+#else
+    buffer[bufPos++] = valueArray[0];
+    buffer[bufPos++] = valueArray[1];
+#endif
 
     return bufPos;
 }
 
+static int
 encodeUInt32WithTLFixedSize(uint8_t tag, uint32_t value, uint8_t* buffer, int bufPos)
 {
     uint8_t* valueArray = (uint8_t*) &value;
@@ -167,18 +167,17 @@ encodeUInt32WithTLFixedSize(uint8_t tag, uint32_t value, uint8_t* buffer, int bu
     buffer[bufPos++] = tag;
     buffer[bufPos++] = 2;
 
-    if (ORDER_LITTLE_ENDIAN) {
-        buffer[bufPos++] = valueArray[3];
-        buffer[bufPos++] = valueArray[2];
-        buffer[bufPos++] = valueArray[1];
-        buffer[bufPos++] = valueArray[0];
-    }
-    else {
-        buffer[bufPos++] = valueArray[0];
-        buffer[bufPos++] = valueArray[1];
-        buffer[bufPos++] = valueArray[2];
-        buffer[bufPos++] = valueArray[3];
-    }
+#if (ORDER_LITTLE_ENDIAN == 1)
+    buffer[bufPos++] = valueArray[3];
+    buffer[bufPos++] = valueArray[2];
+    buffer[bufPos++] = valueArray[1];
+    buffer[bufPos++] = valueArray[0];
+#else
+    buffer[bufPos++] = valueArray[0];
+    buffer[bufPos++] = valueArray[1];
+    buffer[bufPos++] = valueArray[2];
+    buffer[bufPos++] = valueArray[3];
+#endif
 
     return bufPos;
 }

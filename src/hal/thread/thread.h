@@ -28,10 +28,21 @@
 
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /*! \addtogroup hal
    *
    *  @{
    */
+
+/**
+ * @defgroup HAL_THREAD Threading and synchronization API
+ *
+ * @{
+ */
 
 /** Opaque reference of a Thread instance */
 typedef struct sThread* Thread;
@@ -43,7 +54,7 @@ typedef void* Semaphore;
 typedef void* (*ThreadExecutionFunction) (void*);
 
 /**
- * Create a new Thread instance
+ * \brief Create a new Thread instance
  *
  * \param function the entry point of the thread
  * \param parameter a parameter that is passed to the threads start function
@@ -55,7 +66,7 @@ Thread
 Thread_create(ThreadExecutionFunction function, void* parameter, bool autodestroy);
 
 /**
- * Start a Thread.
+ * \brief Start a Thread.
  *
  * This function invokes the start function of the thread. The thread terminates when
  * the start function returns.
@@ -66,7 +77,7 @@ void
 Thread_start(Thread thread);
 
 /**
- * Destroy a Thread and free resources.
+ * \brief Destroy a Thread and free all related resources.
  *
  * \param thread the Thread instance to destroy
  */
@@ -74,7 +85,7 @@ void
 Thread_destroy(Thread thread);
 
 /**
- * Suspend execution of the Thread for the specified number of milliseconds
+ * \brief Suspend execution of the Thread for the specified number of milliseconds
  */
 void
 Thread_sleep(int millies);
@@ -93,5 +104,12 @@ void
 Semaphore_destroy(Semaphore self);
 
 /*! @} */
+
+/*! @} */
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif /* THREAD_H_ */

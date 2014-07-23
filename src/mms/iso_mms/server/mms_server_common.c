@@ -87,6 +87,24 @@ mmsServer_createConfirmedErrorPdu(uint32_t invokeId, ByteBuffer* response, MmsEr
         asn_long2INTEGER(&mmsPdu->choice.confirmedErrorPDU.serviceError.errorClass.choice.access,
                         ServiceError__errorClass__definition_objectexists);
 	}
+	else if (errorType == MMS_ERROR_FILE_FILE_NON_EXISTENT) {
+        mmsPdu->choice.confirmedErrorPDU.serviceError.errorClass.present =
+                        ServiceError__errorClass_PR_file;
+        asn_long2INTEGER(&mmsPdu->choice.confirmedErrorPDU.serviceError.errorClass.choice.access,
+                        ServiceError__errorClass__file_filenonexistent);
+	}
+	else if (errorType == MMS_ERROR_FILE_OTHER) {
+        mmsPdu->choice.confirmedErrorPDU.serviceError.errorClass.present =
+                        ServiceError__errorClass_PR_file;
+        asn_long2INTEGER(&mmsPdu->choice.confirmedErrorPDU.serviceError.errorClass.choice.access,
+                        ServiceError__errorClass__file_other);
+	}
+    else if (errorType == MMS_ERROR_RESOURCE_OTHER) {
+        mmsPdu->choice.confirmedErrorPDU.serviceError.errorClass.present =
+                        ServiceError__errorClass_PR_resource;
+        asn_long2INTEGER(&mmsPdu->choice.confirmedErrorPDU.serviceError.errorClass.choice.access,
+                        ServiceError__errorClass__resource_other);
+    }
 
 	der_encode(&asn_DEF_MmsPdu, mmsPdu,
 			mmsServer_write_out, (void*) response);

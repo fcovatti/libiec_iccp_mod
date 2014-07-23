@@ -38,17 +38,13 @@
 
 #include <netinet/tcp.h> // required for TCP keepalive
 
-#include "stack_config.h"
+#include "thread.h"
 
-#ifndef SOL_TCP
-#define SOL_TCP IPPROTO_TCP
-#endif
+#include "libiec61850_platform_includes.h"
 
 #ifndef DEBUG_SOCKET
 #define DEBUG_SOCKET 0
 #endif
-
-#include "stack_config.h"
 
 struct sSocket {
     int fd;
@@ -59,26 +55,28 @@ struct sServerSocket {
     int backLog;
 };
 
-//TODO this is linux specific!
 static void
 activateKeepAlive(int sd)
 {
+#if defined SO_KEEPALIVE
     int optval;
     socklen_t optlen = sizeof(optval);
 
     optval = 1;
     setsockopt(sd, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen);
 
-#if defined __linux__
+#if defined TCP_KEEPCNT
     optval = CONFIG_TCP_KEEPALIVE_IDLE;
-    setsockopt(sd, SOL_TCP, TCP_KEEPIDLE, &optval, optlen);
+    setsockopt(sd, IPPROTO_TCP, TCP_KEEPIDLE, &optval, optlen);
 
     optval = CONFIG_TCP_KEEPALIVE_INTERVAL;
-    setsockopt(sd, SOL_TCP, TCP_KEEPINTVL, &optval, optlen);
+    setsockopt(sd, IPPROTO_TCP, TCP_KEEPINTVL, &optval, optlen);
 
     optval = CONFIG_TCP_KEEPALIVE_CNT;
-    setsockopt(sd, SOL_TCP, TCP_KEEPCNT, &optval, optlen);
-#endif
+    setsockopt(sd, IPPROTO_TCP, TCP_KEEPCNT, &optval, optlen);
+#endif /* TCP_KEEPCNT */
+
+#endif /* SO_KEEPALIVE */
 }
 
 static bool
@@ -104,12 +102,14 @@ prepareServerAddress(char* address, int port, struct sockaddr_in* sockaddr)
     return true;
 }
 
+#if 0
 static void
 setSocketNonBlocking(Socket self)
 {
     int flags = fcntl(self->fd, F_GETFL, 0);
     fcntl(self->fd, F_SETFL, flags | O_NONBLOCK);
 }
+#endif
 
 ServerSocket
 TcpServerSocket_create(char* address, int port)
@@ -126,7 +126,6 @@ TcpServerSocket_create(char* address, int port)
             return NULL;
         }
 
-        //TODO check if this works with BSD
         int optionReuseAddr = 1;
         setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &optionReuseAddr, sizeof(int));
 
@@ -149,19 +148,19 @@ TcpServerSocket_create(char* address, int port)
 }
 
 void
-ServerSocket_listen(ServerSocket socket)
+ServerSocket_listen(ServerSocket self)
 {
-    listen(socket->fd, socket->backLog);
+    listen(self->fd, self->backLog);
 }
 
 Socket
-ServerSocket_accept(ServerSocket socket)
+ServerSocket_accept(ServerSocket self)
 {
     int fd;
 
     Socket conSocket = NULL;
 
-    fd = accept(socket->fd, NULL, NULL );
+    fd = accept(self->fd, NULL, NULL );
 
     if (fd >= 0) {
         conSocket = TcpSocket_create();
@@ -172,9 +171,9 @@ ServerSocket_accept(ServerSocket socket)
 }
 
 void
-ServerSocket_setBacklog(ServerSocket socket, int backlog)
+ServerSocket_setBacklog(ServerSocket self, int backlog)
 {
-    socket->backLog = backlog;
+    self->backLog = backlog;
 }
 
 static void
@@ -186,28 +185,34 @@ closeAndShutdownSocket(int socketFd)
             printf("socket_linux.c: call shutdown for %i!\n", socketFd);
 
         // shutdown is required to unblock read or accept in another thread!
-        int res = shutdown(socketFd, SHUT_RDWR);
+        shutdown(socketFd, SHUT_RDWR);
 
         close(socketFd);
     }
 }
 
 void
-ServerSocket_destroy(ServerSocket socket)
+ServerSocket_destroy(ServerSocket self)
 {
-    closeAndShutdownSocket(socket->fd);
+    int fd = self->fd;
 
-    free(socket);
+    self->fd = -1;
+
+    closeAndShutdownSocket(fd);
+
+    Thread_sleep(10);
+
+    free(self);
 }
 
 Socket
 TcpSocket_create()
 {
-    Socket socket = malloc(sizeof(struct sSocket));
+    Socket self = malloc(sizeof(struct sSocket));
 
-    socket->fd = -1;
+    self->fd = -1;
 
-    return socket;
+    return self;
 }
 
 int
@@ -237,7 +242,7 @@ char*
 Socket_getPeerAddress(Socket self)
 {
     struct sockaddr_storage addr;
-    int addrLen = sizeof(addr);
+    socklen_t addrLen = sizeof(addr);
 
     getpeername(self->fd, (struct sockaddr*) &addr, &addrLen);
 
@@ -273,9 +278,14 @@ Socket_getPeerAddress(Socket self)
 }
 
 int
-Socket_read(Socket socket, uint8_t* buf, int size)
+Socket_read(Socket self, uint8_t* buf, int size)
 {
-    int read_bytes = read(socket->fd, buf, size);
+    assert(self != NULL);
+
+    if (self->fd == -1)
+        return -1;
+
+    int read_bytes = read(self->fd, buf, size);
 
     if (read_bytes == -1) {
         int error = errno;
@@ -297,19 +307,25 @@ Socket_read(Socket socket, uint8_t* buf, int size)
 }
 
 int
-Socket_write(Socket socket, uint8_t* buf, int size)
+Socket_write(Socket self, uint8_t* buf, int size)
 {
+    if (self->fd == -1)
+        return -1;
+
     // MSG_NOSIGNAL - prevent send to signal SIGPIPE when peer unexpectedly closed the socket
-    return send(socket->fd, buf, size, MSG_NOSIGNAL);
+    return send(self->fd, buf, size, MSG_NOSIGNAL);
 }
 
 void
-Socket_destroy(Socket socket)
+Socket_destroy(Socket self)
 {
-    closeAndShutdownSocket(socket->fd);
+    int fd = self->fd;
 
-    /* Wait for other threads to realize that the socket has been closed */
-    Thread_sleep(100);
+    self->fd = -1;
 
-    free(socket);
+    closeAndShutdownSocket(fd);
+
+    Thread_sleep(10);
+
+    free(self);
 }

@@ -1,7 +1,7 @@
 /*
  *  mms_goose.c
  *
- *  Copyright 2013 Michael Zillgith
+ *  Copyright 2013, 2014 Michael Zillgith
  *
  *  This file is part of libIEC61850.
  *
@@ -204,10 +204,7 @@ MmsGooseControlBlock_enable(MmsGooseControlBlock self)
 
             MmsValue* macAddress = MmsValue_getElement(dstAddress, 0);
 
-            int i;
-            for (i = 0; i < 6; i++) {
-               commParameters.dstAddress[i] = macAddress->value.octetString.buf[i];
-            }
+            memcpy(commParameters.dstAddress, MmsValue_getOctetStringBuffer(macAddress), 6);
 
             self->publisher = GoosePublisher_create(&commParameters, NULL);
 
@@ -231,10 +228,11 @@ MmsGooseControlBlock_enable(MmsGooseControlBlock self)
             //prepare data set values
             self->dataSetValues = LinkedList_create();
 
-            DataSet* dataSet = self->dataSet;
+            DataSetEntry* dataSetEntry = self->dataSet->fcdas;
 
-            for (i = 0; i < dataSet->elementCount; i++) {
-                LinkedList_add(self->dataSetValues, dataSet->fcda[i]->value);
+            while (dataSetEntry != NULL) {
+                LinkedList_add(self->dataSetValues, dataSetEntry->value);
+                dataSetEntry = dataSetEntry->sibling;
             }
 
             self->goEna = true;
@@ -410,19 +408,18 @@ getGCBForLogicalNodeWithIndex(MmsMapping* self, LogicalNode* logicalNode, int in
 {
     int gseCount = 0;
 
-    GSEControlBlock** gseControlBlocks = self->model->gseCBs;
+    GSEControlBlock* gcb = self->model->gseCBs;
 
-    int i = 0;
-
-    while (gseControlBlocks[i] != NULL ) {
-        if (gseControlBlocks[i]->parent == logicalNode) {
+    /* Iterate list of GoCBs */
+    while (gcb != NULL ) {
+        if (gcb->parent == logicalNode) {
             if (gseCount == index)
-                return gseControlBlocks[i];
+                return gcb;
 
             gseCount++;
         }
 
-        i++;
+        gcb = gcb->sibling;
     }
 
     return NULL ;
@@ -515,6 +512,10 @@ GOOSE_createGOOSEControlBlocks(MmsMapping* self, MmsDomain* domain,
 
         MmsValue* appIdVal = MmsValue_getElement(dstAddress, 3);
         MmsValue_setUint16(appIdVal, appId);
+
+        MmsValue* confRef = MmsValue_getElement(gseValues, 3);
+
+        MmsValue_setUint32(confRef, gooseControlBlock->confRef);
 
         mmsGCB->dataSet = NULL;
 

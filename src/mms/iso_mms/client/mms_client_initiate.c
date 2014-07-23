@@ -1,7 +1,7 @@
 /*
  *  mms_client_initiate.c
  *
- *  Copyright 2013 Michael Zillgith
+ *  Copyright 2013, 2014 Michael Zillgith
  *
  *	This file is part of libIEC61850.
  *
@@ -30,125 +30,131 @@
 
 #include "mms_client_internal.h"
 
-/* servicesSupported = {GetNameList} - required by initiate request */
+/* servicesSupported = {GetNameList} - required by initiate request, other services are required by some servers to work properly */
+//static uint8_t servicesSupported[] = { 0xee, 0x1c, 0x00, 0x00, 0x04, 0x08, 0x00, 0x00, 0x79, 0xef, 0x18 };
 static uint8_t servicesSupported[] = {0x6e, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x98};
-
 
 static InitiateRequestPdu_t
 createInitiateRequestPdu(MmsConnection self)
 {
-	InitiateRequestPdu_t request;
+    InitiateRequestPdu_t request;
 
-	request.localDetailCalling = (Integer32_t*) calloc(1, sizeof(Integer32_t));
-	*(request.localDetailCalling) = self->parameters.maxPduSize;
+    request.localDetailCalling = (Integer32_t*) calloc(1, sizeof(Integer32_t));
+    *(request.localDetailCalling) = self->parameters.maxPduSize;
 
-	request.proposedMaxServOutstandingCalled = DEFAULT_MAX_SERV_OUTSTANDING_CALLED;
-	request.proposedMaxServOutstandingCalling = DEFAULT_MAX_SERV_OUTSTANDING_CALLING;
+    request.proposedMaxServOutstandingCalled = DEFAULT_MAX_SERV_OUTSTANDING_CALLED;
+    request.proposedMaxServOutstandingCalling = DEFAULT_MAX_SERV_OUTSTANDING_CALLING;
 
-	request.proposedDataStructureNestingLevel = (Integer8_t*) calloc(1, sizeof(Integer8_t));
-	*(request.proposedDataStructureNestingLevel) = DEFAULT_DATA_STRUCTURE_NESTING_LEVEL;
+    request.proposedDataStructureNestingLevel = (Integer8_t*) calloc(1, sizeof(Integer8_t));
+    *(request.proposedDataStructureNestingLevel) = DEFAULT_DATA_STRUCTURE_NESTING_LEVEL;
 
-	request.mmsInitRequestDetail.proposedParameterCBB.size = 2;
-	request.mmsInitRequestDetail.proposedParameterCBB.bits_unused = 5;
-	request.mmsInitRequestDetail.proposedParameterCBB.buf = (uint8_t*) calloc(2, sizeof(uint8_t));
-	request.mmsInitRequestDetail.proposedParameterCBB.buf[0] = 0xe9;
-	request.mmsInitRequestDetail.proposedParameterCBB.buf[1] = 0x00;
+    request.mmsInitRequestDetail.proposedParameterCBB.size = 2;
+    request.mmsInitRequestDetail.proposedParameterCBB.bits_unused = 5;
+    request.mmsInitRequestDetail.proposedParameterCBB.buf = (uint8_t*) calloc(2, sizeof(uint8_t));
+    //request.mmsInitRequestDetail.proposedParameterCBB.buf[0] = 0xf1;
+    request.mmsInitRequestDetail.proposedParameterCBB.buf[0] = 0xe9;
+    request.mmsInitRequestDetail.proposedParameterCBB.buf[1] = 0x00;
 
-	request.mmsInitRequestDetail.proposedVersionNumber = 1;
+    request.mmsInitRequestDetail.proposedVersionNumber = 1;
 
-	request.mmsInitRequestDetail.servicesSupportedCalling.size = 11;
-	request.mmsInitRequestDetail.servicesSupportedCalling.bits_unused = 3;
+    request.mmsInitRequestDetail.servicesSupportedCalling.size = 11;
+    request.mmsInitRequestDetail.servicesSupportedCalling.bits_unused = 3;
 
-	request.mmsInitRequestDetail.servicesSupportedCalling.buf = servicesSupported;
+    request.mmsInitRequestDetail.servicesSupportedCalling.buf = servicesSupported;
 
-	return request;
+    return request;
 }
 
 static void
 freeInitiateRequestPdu(InitiateRequestPdu_t request)
 {
-	free(request.localDetailCalling);
-	free(request.proposedDataStructureNestingLevel);
-	free(request.mmsInitRequestDetail.proposedParameterCBB.buf);
+    free(request.localDetailCalling);
+    free(request.proposedDataStructureNestingLevel);
+    free(request.mmsInitRequestDetail.proposedParameterCBB.buf);
 }
 
 int
 mmsClient_createInitiateRequest(MmsConnection self, ByteBuffer* message)
 {
-	MmsPdu_t* mmsPdu = (MmsPdu_t*) calloc(1, sizeof(MmsPdu_t));
+    MmsPdu_t* mmsPdu = (MmsPdu_t*) calloc(1, sizeof(MmsPdu_t));
 
-	mmsPdu->present = MmsPdu_PR_initiateRequestPdu;
+    mmsPdu->present = MmsPdu_PR_initiateRequestPdu;
 
-	mmsPdu->choice.initiateRequestPdu = createInitiateRequestPdu(self);
+    mmsPdu->choice.initiateRequestPdu = createInitiateRequestPdu(self);
 
-	asn_enc_rval_t rval;
+    asn_enc_rval_t rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
+            (asn_app_consume_bytes_f*) mmsClient_write_out, (void*) message);
 
-	rval = der_encode(&asn_DEF_MmsPdu, mmsPdu,
-	            (asn_app_consume_bytes_f*) mmsClient_write_out, (void*) message);
+    freeInitiateRequestPdu(mmsPdu->choice.initiateRequestPdu);
+    free(mmsPdu);
 
-	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
+    return rval.encoded;
+}
 
-	freeInitiateRequestPdu(mmsPdu->choice.initiateRequestPdu);
-	free(mmsPdu);
-
-	return rval.encoded;
+int
+mmsClient_createConcludeRequest(MmsConnection self, ByteBuffer* message)
+{
+    if (message->maxSize > 1) {
+        message->buffer[0] = 0x8b;
+        message->buffer[1] = 0;
+        message->size = 2;
+        return 2;
+    }
+    else
+        return -1;
 }
 
 bool
 mmsClient_parseInitiateResponse(MmsConnection self)
 {
-	bool result;
-	MmsPdu_t* mmsPdu = 0;
-	MmsIndication retVal =  MMS_OK;
+    bool result = false;
+    MmsPdu_t* mmsPdu = 0;
 
-	MmsValue* valueList = NULL;
-	MmsValue* value = NULL;
+    asn_dec_rval_t rval = ber_decode(NULL, &asn_DEF_MmsPdu,
+            (void**) &mmsPdu, ByteBuffer_getBuffer(self->lastResponse),
+            ByteBuffer_getSize(self->lastResponse));
 
-	asn_dec_rval_t rval;
+    if (rval.code != RC_OK) goto exit;
 
-	rval = ber_decode(NULL, &asn_DEF_MmsPdu,
-			(void**) &mmsPdu, ByteBuffer_getBuffer(self->lastResponse),
-			ByteBuffer_getSize(self->lastResponse));
+    if (mmsPdu->present == MmsPdu_PR_initiateResponsePdu) {
+        InitiateResponsePdu_t* initiateResponse = &(mmsPdu->choice.initiateResponsePdu);
 
-	if (DEBUG) xer_fprint(stdout, &asn_DEF_MmsPdu, mmsPdu);
+        if (initiateResponse->localDetailCalled != NULL) {
+            long maxPduSize;
 
-	if (mmsPdu->present == MmsPdu_PR_initiateResponsePdu) {
-		InitiateResponsePdu_t* initiateResponse = &(mmsPdu->choice.initiateResponsePdu);
+            maxPduSize = *(initiateResponse->localDetailCalled);
 
-		if (initiateResponse->localDetailCalled != NULL) {
-			long maxPduSize;
+            self->parameters.maxPduSize = maxPduSize;
+        }
 
-			maxPduSize = *(initiateResponse->localDetailCalled);
+        if (initiateResponse->negotiatedDataStructureNestingLevel != NULL) {
+            long nestingLevel;
 
-			self->parameters.maxPduSize = maxPduSize;
-		}
+            nestingLevel = *(initiateResponse->negotiatedDataStructureNestingLevel);
 
-		if (initiateResponse->negotiatedDataStructureNestingLevel != NULL) {
-			long nestingLevel;
+            self->parameters.dataStructureNestingLevel = nestingLevel;
+        }
 
-			nestingLevel = *(initiateResponse->negotiatedDataStructureNestingLevel);
+        long maxServerOutstandingCalled;
 
-			self->parameters.dataStructureNestingLevel = nestingLevel;
-		}
+        maxServerOutstandingCalled = initiateResponse->negotiatedMaxServOutstandingCalled;
 
-		long maxServerOutstandingCalled;
+        self->parameters.maxServOutstandingCalled = maxServerOutstandingCalled;
 
-		maxServerOutstandingCalled = initiateResponse->negotiatedMaxServOutstandingCalled;
+        long maxServerOutstandingCalling;
 
-		self->parameters.maxServOutstandingCalled = maxServerOutstandingCalled;
+        maxServerOutstandingCalling = initiateResponse->negotiatedMaxServOutstandingCalling;
 
-		long maxServerOutstandingCalling;
+        self->parameters.maxServOutstandingCalling = maxServerOutstandingCalling;
 
-		maxServerOutstandingCalling = initiateResponse->negotiatedMaxServOutstandingCalling;
+        result = true;
+    }
+    else
+        //TODO parse error message
+        result = false;
 
-		self->parameters.maxServOutstandingCalling = maxServerOutstandingCalling;
+exit:
+    asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
 
-		result = true;
-	}
-	else //TODO parse error message
-		result = false;
-
-	asn_DEF_MmsPdu.free_struct(&asn_DEF_MmsPdu, mmsPdu, 0);
-
-	return result;
+    return result;
 }

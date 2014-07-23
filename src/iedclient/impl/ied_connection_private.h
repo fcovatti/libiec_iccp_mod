@@ -28,6 +28,22 @@
 #define DEBUG_IED_CLIENT 0
 #endif
 
+#include "thread.h"
+
+struct sIedConnection
+{
+    MmsConnection connection;
+    IedConnectionState state;
+    LinkedList enabledReports;
+    LinkedList logicalDevices;
+    LinkedList clientControls;
+    LastApplError lastApplError;
+    Semaphore stateMutex;
+
+    IedConnectionClosedHandler connectionCloseHandler;
+    void* connectionClosedParameter;
+};
+
 struct sClientReportControlBlock {
     char* objectReference;
     bool isBuffered;
@@ -50,6 +66,9 @@ struct sClientReportControlBlock {
     MmsValue* owner;
 };
 
+IedClientError
+private_IedConnection_mapMmsErrorToIedError(MmsError mmsError);
+
 void
 private_IedConnection_addControlClient(IedConnection self, ControlObjectClient control);
 
@@ -58,5 +77,23 @@ private_IedConnection_removeControlClient(IedConnection self, ControlObjectClien
 
 bool
 private_ClientReportControlBlock_updateValues(ClientReportControlBlock self, MmsValue* values);
+
+void
+private_IedConnection_handleReport(IedConnection self, MmsValue* value);
+
+IedClientError
+iedConnection_mapMmsErrorToIedError(MmsError mmsError);
+
+IedClientError
+iedConnection_mapDataAccessErrorToIedError(MmsDataAccessError mmsError);
+
+ClientReport
+ClientReport_create(void);
+
+void
+ClientReport_destroy(ClientReport self);
+
+void
+private_ControlObjectClient_invokeCommandTerminationHandler(ControlObjectClient self);
 
 #endif /* IED_CONNECTION_PRIVATE_H_ */
