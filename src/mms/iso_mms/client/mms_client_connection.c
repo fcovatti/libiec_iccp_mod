@@ -1106,11 +1106,14 @@ MmsConnection_readVariable(MmsConnection self, MmsError* mmsError,
 {
     ByteBuffer* payload = IsoClientConnection_allocateTransmitBuffer(self->isoClient);
 
+	if(payload == NULL)
+		return NULL;
     MmsValue* value = NULL;
 
     *mmsError = MMS_ERROR_NONE;
 
     uint32_t invokeId = getNextInvokeId(self);
+
 
     mmsClient_createReadRequest(invokeId, domainId, itemId, payload);
 
@@ -1799,9 +1802,8 @@ MmsIndication MmsConnection_sendUnconfirmedPDU(MmsConnection self, MmsError* cli
 	//ByteBuffer payload;
 	//ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
 
-    ByteBuffer* payload = IsoClientConnection_allocateTransmitBuffer(self->isoClient);
-
     uint32_t invokeId = getNextInvokeId(self);
+    ByteBuffer* payload = IsoClientConnection_allocateTransmitBuffer(self->isoClient);
 
 	*clientError = MMS_ERROR_NONE;
 
@@ -1812,7 +1814,7 @@ MmsIndication MmsConnection_sendUnconfirmedPDU(MmsConnection self, MmsError* cli
 
 	mmsClient_createUnconfirmedPDU(domainId, itemId, timeStamp, payload);
 
-	self->connectionState = MMS_CON_WAITING;
+	//self->connectionState = MMS_CON_WAITING;
 
 
    	addToOutstandingCalls(self, invokeId);
@@ -1821,7 +1823,7 @@ MmsIndication MmsConnection_sendUnconfirmedPDU(MmsConnection self, MmsError* cli
 
 	removeFromOutstandingCalls(self, invokeId);
 
-	self->connectionState = MMS_CON_IDLE;
+	//self->connectionState = MMS_CON_IDLE;
 
 	return MMS_OK;
 }
