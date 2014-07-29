@@ -1801,6 +1801,7 @@ MmsIndication MmsConnection_sendUnconfirmedPDU(MmsConnection self, MmsError* cli
 
     ByteBuffer* payload = IsoClientConnection_allocateTransmitBuffer(self->isoClient);
 
+    uint32_t invokeId = getNextInvokeId(self);
 
 	*clientError = MMS_ERROR_NONE;
 
@@ -1813,7 +1814,12 @@ MmsIndication MmsConnection_sendUnconfirmedPDU(MmsConnection self, MmsError* cli
 
 	self->connectionState = MMS_CON_WAITING;
 
+
+   	addToOutstandingCalls(self, invokeId);
+
 	IsoClientConnection_sendMessage(self->isoClient, payload);
+
+	removeFromOutstandingCalls(self, invokeId);
 
 	self->connectionState = MMS_CON_IDLE;
 
