@@ -1799,8 +1799,6 @@ MmsVariableAccessSpecification_destroy(MmsVariableAccessSpecification* self)
 
 MmsIndication MmsConnection_sendUnconfirmedPDU(MmsConnection self, MmsError* clientError,char* domainId, char* itemId, uint32_t timeStamp
 		) {
-	//ByteBuffer payload;
-	//ByteBuffer_wrap(&payload, self->buffer, 0, self->parameters.maxPduSize);
 
     uint32_t invokeId = getNextInvokeId(self);
     ByteBuffer* payload = IsoClientConnection_allocateTransmitBuffer(self->isoClient);
@@ -1814,8 +1812,6 @@ MmsIndication MmsConnection_sendUnconfirmedPDU(MmsConnection self, MmsError* cli
 
 	mmsClient_createUnconfirmedPDU(domainId, itemId, timeStamp, payload);
 
-	//self->connectionState = MMS_CON_WAITING;
-
 
    	addToOutstandingCalls(self, invokeId);
 
@@ -1823,7 +1819,6 @@ MmsIndication MmsConnection_sendUnconfirmedPDU(MmsConnection self, MmsError* cli
 
 	removeFromOutstandingCalls(self, invokeId);
 
-	//self->connectionState = MMS_CON_IDLE;
 
 	return MMS_OK;
 }
