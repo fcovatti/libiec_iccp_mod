@@ -179,12 +179,18 @@ createNewDomainVariableSpecification(char* domainId, char* itemId)
 	//VariableSpecification_t* varSpec = (VariableSpecification_t*) calloc(1, sizeof(VariableSpecification_t));
 
 	varSpec->present = VariableSpecification_PR_name;
-	varSpec->choice.name.present = ObjectName_PR_domainspecific;
-	varSpec->choice.name.choice.domainspecific.domainId.buf = (uint8_t*) domainId;
-	varSpec->choice.name.choice.domainspecific.domainId.size = strlen(domainId);
-	varSpec->choice.name.choice.domainspecific.itemId.buf = (uint8_t*) itemId;
-	varSpec->choice.name.choice.domainspecific.itemId.size = strlen(itemId);
-
+	if(domainId !=NULL){
+		varSpec->choice.name.present = ObjectName_PR_domainspecific;
+		varSpec->choice.name.choice.domainspecific.domainId.buf = (uint8_t*) domainId;
+		varSpec->choice.name.choice.domainspecific.domainId.size = strlen(domainId);
+		varSpec->choice.name.choice.domainspecific.itemId.buf = (uint8_t*) itemId;
+		varSpec->choice.name.choice.domainspecific.itemId.size = strlen(itemId);
+	}else{
+    	varSpec->choice.name.present = ObjectName_PR_vmdspecific;
+	    varSpec->choice.name.choice.vmdspecific.buf = (uint8_t*) itemId;
+	    varSpec->choice.name.choice.vmdspecific.size = strlen(itemId);
+	}
+	
 	return varSpec;
 }
 
