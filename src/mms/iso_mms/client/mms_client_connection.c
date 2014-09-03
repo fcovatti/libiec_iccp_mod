@@ -35,7 +35,7 @@
 
 #include <assert.h>
 
-#define CONFIG_MMS_CONNECTION_DEFAULT_TIMEOUT 5000
+#define CONFIG_MMS_CONNECTION_DEFAULT_TIMEOUT 1000
 #define OUTSTANDING_CALLS 10
 
 static void
@@ -866,7 +866,6 @@ waitForConnectResponse(MmsConnection self)
 
         currentTime = Hal_getTimeInMs();
     }
-
 }
 
 bool
