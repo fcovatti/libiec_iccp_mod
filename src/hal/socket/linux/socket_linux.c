@@ -219,6 +219,8 @@ int
 Socket_connect(Socket self, char* address, int port)
 {
     struct sockaddr_in serverAddress;
+    fd_set fdset;
+    struct timeval tv;
 
     if (DEBUG_SOCKET)
         printf("Socket_connect: %s:%i\n", address, port);
@@ -226,16 +228,32 @@ Socket_connect(Socket self, char* address, int port)
     if (!prepareServerAddress(address, port, &serverAddress))
         return 0;
 
+
     self->fd = socket(AF_INET, SOCK_STREAM, 0);
+    fcntl(self->fd, F_SETFL, O_NONBLOCK);
 
 #if CONFIG_ACTIVATE_TCP_KEEPALIVE == 1
     activateKeepAlive(self->fd);
 #endif
+	connect(self->fd, (struct sockaddr *) &serverAddress, sizeof(serverAddress));
 
-    if (connect(self->fd, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0)
-        return 0;
-    else
-        return 1;
+    FD_ZERO(&fdset);
+    FD_SET(self->fd, &fdset);
+    tv.tv_sec = 1;             /* 1 second timeout */
+    tv.tv_usec = 0;
+
+    if (select(self->fd + 1, NULL, &fdset, NULL, &tv) == 1)
+    {
+        int so_error;
+        socklen_t len = sizeof so_error;
+
+        getsockopt(self->fd, SOL_SOCKET, SO_ERROR, &so_error, &len);
+
+        if (so_error == 0) {
+			return 1;
+        }
+    }
+	return 0;
 }
 
 char*
