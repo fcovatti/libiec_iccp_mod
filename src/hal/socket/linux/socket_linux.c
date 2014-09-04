@@ -221,6 +221,7 @@ Socket_connect(Socket self, char* address, int port)
     struct sockaddr_in serverAddress;
     fd_set fdset;
     struct timeval tv;
+	int flags;
 
     if (DEBUG_SOCKET)
         printf("Socket_connect: %s:%i\n", address, port);
@@ -230,6 +231,7 @@ Socket_connect(Socket self, char* address, int port)
 
 
     self->fd = socket(AF_INET, SOCK_STREAM, 0);
+	flags = fcntl(self->fd, F_GETFL);
     fcntl(self->fd, F_SETFL, O_NONBLOCK);
 
 #if CONFIG_ACTIVATE_TCP_KEEPALIVE == 1
@@ -250,6 +252,7 @@ Socket_connect(Socket self, char* address, int port)
         getsockopt(self->fd, SOL_SOCKET, SO_ERROR, &so_error, &len);
 
         if (so_error == 0) {
+			fcntl(self->fd, F_SETFL, flags); //original flags
 			return 1;
         }
     }
