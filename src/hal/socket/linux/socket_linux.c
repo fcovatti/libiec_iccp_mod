@@ -241,7 +241,7 @@ Socket_connect(Socket self, char* address, int port)
 
     FD_ZERO(&fdset);
     FD_SET(self->fd, &fdset);
-    tv.tv_sec = 1;             /* 1 second timeout */
+    tv.tv_sec = 2;             /* 2 second timeout */
     tv.tv_usec = 0;
 
     if (select(self->fd + 1, NULL, &fdset, NULL, &tv) == 1)
